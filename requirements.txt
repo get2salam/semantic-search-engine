@@ -1,0 +1,11 @@
+# Core dependencies
+sentence-transformers>=2.2.0
+numpy>=1.21.0
+torch>=1.9.0
+
+# Optional: Faster similarity search (recommended for large datasets)
+faiss-cpu>=1.7.0
+
+# Development
+pytest>=7.0.0
+black>=22.0.0
