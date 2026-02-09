@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  semantic-search:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: semantic-search-engine
+    volumes:
+      # Persist index data between container restarts
+      - index-data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+
+volumes:
+  index-data:
+    driver: local
