@@ -1,4 +1,4 @@
-.PHONY: help install dev build run test lint format clean
+.PHONY: help install dev build run serve test lint format clean
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -9,7 +9,7 @@ install: ## Install production dependencies
 
 dev: ## Install development dependencies
 	pip install -r requirements.txt
-	pip install ruff pytest
+	pip install ruff pytest httpx
 
 build: ## Build the Docker image
 	docker build -t semantic-search-engine .
@@ -17,11 +17,17 @@ build: ## Build the Docker image
 run: ## Run the interactive demo
 	python demo.py
 
-run-docker: ## Run via Docker Compose
+serve: ## Start the REST API server
+	uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+
+serve-docker: ## Run the API via Docker Compose
 	docker compose up --build
 
-test: ## Run the test suite
+test: ## Run the full test suite
 	pytest tests/ -v
+
+test-api: ## Run API integration tests only
+	pytest tests/test_api.py -v
 
 lint: ## Run linter (ruff)
 	ruff check .

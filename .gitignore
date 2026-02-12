@@ -48,6 +48,12 @@ htmlcov/
 *.npy
 saved_indices/
 
+# Environment
+.env
+
+# Ruff
+.ruff_cache/
+
 # OS
 .DS_Store
 Thumbs.db

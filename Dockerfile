@@ -23,10 +23,26 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ---------- runtime ----------
 FROM deps AS runtime
 
+# Non-root user for security
+RUN groupadd -r sse && useradd -r -g sse -d /app -s /sbin/nologin sse
+
 COPY . .
 
 # Pre-download the default model so first run is fast
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+ENV TRANSFORMERS_CACHE=/app/.cache \
+    SSE_HOST=0.0.0.0 \
+    SSE_PORT=8000 \
+    SSE_LOG_LEVEL=INFO
 
-# Default command: run the interactive demo
-CMD ["python", "demo.py"]
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" && \
+    chown -R sse:sse /app
+
+USER sse
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+ENTRYPOINT ["python", "-m", "uvicorn", "api:app"]
+CMD ["--host", "0.0.0.0", "--port", "8000"]

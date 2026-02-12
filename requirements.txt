@@ -1,11 +1,18 @@
-# Core dependencies
+# Core
 sentence-transformers>=2.2.0
 numpy>=1.21.0
 torch>=1.9.0
 
+# API
+fastapi>=0.109.0
+uvicorn[standard]>=0.25.0
+pydantic>=2.0.0
+pydantic-settings>=2.1.0
+
 # Optional: Faster similarity search (recommended for large datasets)
 faiss-cpu>=1.7.0
 
-# Development
+# Development & Testing
 pytest>=7.0.0
-black>=22.0.0
+httpx>=0.25.0
+ruff>=0.4.0

@@ -1,22 +1,22 @@
 [project]
 name = "semantic-search-engine"
-version = "1.0.0"
-description = "A lightweight semantic search engine using sentence embeddings and FAISS"
+version = "1.1.0"
+description = "A semantic search engine with REST API, powered by sentence embeddings and FAISS"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "get2salam"},
 ]
-keywords = ["semantic-search", "embeddings", "nlp", "faiss", "sentence-transformers"]
+keywords = ["semantic-search", "embeddings", "nlp", "faiss", "sentence-transformers", "fastapi"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: Indexing",
 ]
@@ -25,11 +25,16 @@ dependencies = [
     "numpy>=1.21.0",
     "torch>=1.9.0",
     "faiss-cpu>=1.7.0",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.25.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "httpx>=0.25.0",
     "ruff>=0.4.0",
 ]
 
@@ -43,7 +48,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 
 [tool.ruff.lint]

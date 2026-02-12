@@ -1,19 +1,34 @@
 version: "3.9"
 
 services:
-  semantic-search:
+  search-api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: semantic-search-engine
-    volumes:
-      # Persist index data between container restarts
-      - index-data:/app/data
+    container_name: semantic-search-api
+    ports:
+      - "${SSE_PORT:-8000}:8000"
     environment:
-      - PYTHONUNBUFFERED=1
-    stdin_open: true
-    tty: true
+      - SSE_MODEL_NAME=${SSE_MODEL_NAME:-all-MiniLM-L6-v2}
+      - SSE_USE_FAISS=${SSE_USE_FAISS:-true}
+      - SSE_LOG_LEVEL=${SSE_LOG_LEVEL:-INFO}
+      - SSE_WORKERS=${SSE_WORKERS:-1}
+      - SSE_INDEX_PATH=${SSE_INDEX_PATH:-}
+      - SSE_AUTO_SAVE_PATH=/data/index
+    volumes:
+      - model-cache:/app/.cache
+      - index-data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
 
 volumes:
+  model-cache:
+    driver: local
   index-data:
     driver: local
