@@ -16,9 +16,11 @@ Ships with a **REST API** (FastAPI), **Docker** support, and **CI/CD** pipeline 
 - 🔎 **Fast & Efficient** — FAISS-powered vector similarity search
 - 🤖 **State-of-the-Art Embeddings** — Uses `all-MiniLM-L6-v2` (384-dim, blazing fast)
 - 🌐 **REST API** — Production-grade FastAPI with OpenAPI docs, validation, CORS
+- 🎯 **Fine-Tuning Pipeline** — Domain-adaptive training with contrastive/triplet loss and k-fold CV
+- 📊 **Retrieval Evaluation** — MRR, MAP, NDCG@k, Precision@k, Recall@k with multi-model benchmarking
 - 🐳 **Docker Ready** — Multi-stage build, non-root user, health checks
 - 🔄 **CI/CD** — GitHub Actions: lint → test (matrix) → Docker build & verify
-- 📊 **Observability** — Request timing headers, structured logging, health endpoint
+- 📈 **Observability** — Request timing headers, structured logging, health endpoint
 - 💾 **Persistent Storage** — Save and load indices to disk
 - ⚙️ **12-Factor Config** — Environment-based configuration via pydantic-settings
 
@@ -150,12 +152,89 @@ See [`.env.example`](.env.example) for the full list.
 | `SSE_INDEX_PATH`          | —                    | Load index on startup            |
 | `SSE_AUTO_SAVE_PATH`      | —                    | Auto-save after modifications    |
 
+## 🎯 Fine-Tuning
+
+Train domain-specific embeddings using contrastive learning:
+
+```python
+from training import FineTuner, TrainingConfig, TrainingPair
+
+config = TrainingConfig(
+    base_model="all-MiniLM-L6-v2",
+    output_dir="models/fine-tuned",
+    epochs=5,
+    loss_type="cosine",      # or "contrastive", "triplet"
+    cv_folds=3,              # k-fold cross-validation
+)
+
+tuner = FineTuner(config)
+tuner.add_pairs([
+    TrainingPair(query="breach of contract", positive="contractual obligation violated"),
+    TrainingPair(query="negligence claim", positive="failure to exercise reasonable care"),
+])
+# Or load from JSONL
+tuner.load_pairs_jsonl("data/training_pairs.jsonl")
+
+result = tuner.train()
+print(f"Best score: {result.best_score}")
+```
+
+**CLI:**
+
+```bash
+python training.py --data pairs.jsonl --model all-MiniLM-L6-v2 --epochs 5 --cv-folds 3
+```
+
+## 📊 Evaluation & Benchmarking
+
+Evaluate retrieval quality with standard IR metrics:
+
+```python
+from evaluation import RetrievalEvaluator, EvalQuery, ModelBenchmark
+
+evaluator = RetrievalEvaluator()
+evaluator.add_queries([
+    EvalQuery(query="machine learning", relevant_docs=["doc_1", "doc_3"]),
+    EvalQuery(query="deep learning", relevant_docs=["doc_2"],
+              relevance_grades={"doc_2": 3, "doc_5": 1}),  # graded relevance
+])
+
+report = evaluator.evaluate(search_fn=my_search, k_values=[1, 3, 5, 10])
+report.print_summary()
+```
+
+**Multi-model benchmark:**
+
+```python
+benchmark = ModelBenchmark(
+    models=["all-MiniLM-L6-v2", "all-mpnet-base-v2", "multi-qa-MiniLM-L6-cos-v1"],
+    queries=eval_queries,
+    corpus=documents,
+    corpus_ids=doc_ids,
+)
+result = benchmark.run()
+result.print_comparison()
+```
+
+**Output:**
+
+```
+  Model Benchmark Comparison
+  ================================================================
+  Model                          MRR      MAP    NDCG@5     R@10
+  all-mpnet-base-v2            0.9200   0.8850   0.9100   0.9500 🏆
+  multi-qa-MiniLM-L6-cos-v1   0.8800   0.8400   0.8700   0.9200
+  all-MiniLM-L6-v2            0.8500   0.8100   0.8400   0.8900
+```
+
 ## 📁 Project Structure
 
 ```
 semantic-search-engine/
 ├── api.py                    # FastAPI REST application
 ├── semantic_search.py        # Core search engine class
+├── training.py               # Fine-tuning pipeline (contrastive/triplet/CV)
+├── evaluation.py             # Retrieval metrics & multi-model benchmarking
 ├── config.py                 # Pydantic-settings configuration
 ├── demo.py                   # Interactive CLI demo
 ├── requirements.txt          # Python dependencies
@@ -169,7 +248,8 @@ semantic-search-engine/
 │       └── ci.yml            # CI pipeline (lint → test → docker)
 ├── tests/
 │   ├── test_search.py        # Core engine unit tests
-│   └── test_api.py           # API integration tests
+│   ├── test_api.py           # API integration tests
+│   └── test_training.py      # Training & evaluation tests
 ├── LICENSE
 └── README.md
 ```
