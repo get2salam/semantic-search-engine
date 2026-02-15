@@ -20,6 +20,7 @@ Ships with a **REST API** (FastAPI), **Docker** support, and **CI/CD** pipeline 
 - 📊 **Retrieval Evaluation** — MRR, MAP, NDCG@k, Precision@k, Recall@k with multi-model benchmarking
 - 🐳 **Docker Ready** — Multi-stage build, non-root user, health checks
 - 🔄 **CI/CD** — GitHub Actions: lint → test (matrix) → Docker build & verify
+- 🧪 **Experiment Tracking** — Lightweight MLOps: log runs, compare models, track lineage (no external deps)
 - 📈 **Observability** — Request timing headers, structured logging, health endpoint
 - 💾 **Persistent Storage** — Save and load indices to disk
 - ⚙️ **12-Factor Config** — Environment-based configuration via pydantic-settings
@@ -227,6 +228,63 @@ result.print_comparison()
   all-MiniLM-L6-v2            0.8500   0.8100   0.8400   0.8900
 ```
 
+## 🧪 Experiment Tracking
+
+Track training runs, compare models, and manage model versions — all locally with zero external dependencies:
+
+```python
+from experiment_tracker import ExperimentTracker
+
+tracker = ExperimentTracker("experiments/")
+
+# Log a training run
+with tracker.start_run("fine-tune-v1", tags=["baseline"]) as run:
+    run.log_params({"model": "all-MiniLM-L6-v2", "epochs": 5, "lr": 2e-5})
+    for epoch in range(5):
+        run.log_metric("train_loss", losses[epoch], step=epoch)
+    run.log_metrics({"mrr": 0.87, "map": 0.82, "ndcg@5": 0.79})
+    run.set_model_version("1.0.0")
+    run.log_artifact("models/fine-tuned/config.json")
+
+# Compare experiments
+comparison = tracker.compare(["fine-tune-v1", "fine-tune-v2"])
+comparison.print_table()
+
+# Find the best model
+best = tracker.best_run(metric="mrr", higher_is_better=True)
+print(f"Best: {best.name} (MRR={best.final_metrics['mrr']})")
+
+# Model lineage
+lineage = tracker.model_lineage("fine-tune-v3")
+for run in lineage:
+    print(f"  {run.model_version} <- ", end="")
+```
+
+**CLI:**
+
+```bash
+# List all runs
+python experiment_tracker.py list --status completed
+
+# Compare runs
+python experiment_tracker.py compare fine-tune-v1 fine-tune-v2
+
+# Find best run
+python experiment_tracker.py best mrr
+
+# Export summary
+python experiment_tracker.py export --output results.json
+```
+
+**Features:**
+- **Run lifecycle** — automatic timing, status tracking, failure handling
+- **Metric history** — step-by-step training curves with timestamps
+- **Artifact logging** — copy model files, configs, checkpoints
+- **Model versioning** — version strings + SHA-256 integrity hashes
+- **Lineage tracking** — parent-child chains for iterative experiments
+- **Comparison tables** — side-by-side metric diffs against baseline
+- **Persistence** — JSON files, git-friendly, no server required
+
 ## 📁 Project Structure
 
 ```
@@ -235,6 +293,7 @@ semantic-search-engine/
 ├── semantic_search.py        # Core search engine class
 ├── training.py               # Fine-tuning pipeline (contrastive/triplet/CV)
 ├── evaluation.py             # Retrieval metrics & multi-model benchmarking
+├── experiment_tracker.py     # MLOps experiment tracking & model registry
 ├── config.py                 # Pydantic-settings configuration
 ├── demo.py                   # Interactive CLI demo
 ├── requirements.txt          # Python dependencies
@@ -249,7 +308,8 @@ semantic-search-engine/
 ├── tests/
 │   ├── test_search.py        # Core engine unit tests
 │   ├── test_api.py           # API integration tests
-│   └── test_training.py      # Training & evaluation tests
+│   ├── test_training.py      # Training & evaluation tests
+│   └── test_experiment_tracker.py  # Experiment tracking tests (46 tests)
 ├── LICENSE
 └── README.md
 ```
