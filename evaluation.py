@@ -23,9 +23,9 @@ import json
 import logging
 import math
 import time
-from dataclasses import dataclass, field, asdict
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -42,8 +42,8 @@ class EvalQuery:
     """A query with its known relevant documents."""
 
     query: str
-    relevant_docs: List[str]
-    relevance_grades: Optional[Dict[str, int]] = None  # doc_id -> grade (for NDCG)
+    relevant_docs: list[str]
+    relevance_grades: dict[str, int] | None = None  # doc_id -> grade (for NDCG)
 
     def get_grade(self, doc_id: str) -> int:
         """Return graded relevance (defaults to binary: 1 if relevant, 0 if not)."""
@@ -57,13 +57,13 @@ class EvalResult:
     """Result for a single query evaluation."""
 
     query: str
-    retrieved_docs: List[str]
-    relevant_docs: List[str]
+    retrieved_docs: list[str]
+    relevant_docs: list[str]
     reciprocal_rank: float
     average_precision: float
-    ndcg: Dict[int, float]  # k -> NDCG@k
-    precision: Dict[int, float]  # k -> P@k
-    recall: Dict[int, float]  # k -> R@k
+    ndcg: dict[int, float]  # k -> NDCG@k
+    precision: dict[int, float]  # k -> P@k
+    recall: dict[int, float]  # k -> R@k
 
 
 @dataclass
@@ -71,15 +71,15 @@ class EvalReport:
     """Aggregated evaluation report across all queries."""
 
     num_queries: int
-    k_values: List[int]
+    k_values: list[int]
     mrr: float  # Mean Reciprocal Rank
     map_score: float  # Mean Average Precision
-    ndcg: Dict[int, float]  # Mean NDCG@k
-    precision: Dict[int, float]  # Mean Precision@k
-    recall: Dict[int, float]  # Mean Recall@k
-    per_query: List[EvalResult]
+    ndcg: dict[int, float]  # Mean NDCG@k
+    precision: dict[int, float]  # Mean Precision@k
+    recall: dict[int, float]  # Mean Recall@k
+    per_query: list[EvalResult]
     elapsed_seconds: float
-    model_name: Optional[str] = None
+    model_name: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -104,21 +104,21 @@ class EvalReport:
     def print_summary(self) -> None:
         """Print a formatted summary table to stdout."""
         name = self.model_name or "Model"
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  Retrieval Evaluation Report — {name}")
         print(f"  Queries: {self.num_queries} | Time: {self.elapsed_seconds:.2f}s")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  MRR:  {self.mrr:.4f}")
         print(f"  MAP:  {self.map_score:.4f}")
         print()
         print(f"  {'k':>4}  {'NDCG@k':>8}  {'P@k':>8}  {'R@k':>8}")
-        print(f"  {'—'*4}  {'—'*8}  {'—'*8}  {'—'*8}")
+        print(f"  {'—' * 4}  {'—' * 8}  {'—' * 8}  {'—' * 8}")
         for k in self.k_values:
             ndcg = self.ndcg.get(k, 0)
             prec = self.precision.get(k, 0)
             rec = self.recall.get(k, 0)
             print(f"  {k:>4}  {ndcg:>8.4f}  {prec:>8.4f}  {rec:>8.4f}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +227,7 @@ def ndcg_at_k(
 # ---------------------------------------------------------------------------
 
 # Type alias: search function takes (query, k) and returns list of doc IDs
-SearchFn = Callable[[str, int], List[str]]
+SearchFn = Callable[[str, int], list[str]]
 
 
 class RetrievalEvaluator:
@@ -250,7 +250,7 @@ class RetrievalEvaluator:
     """
 
     def __init__(self):
-        self._queries: List[EvalQuery] = []
+        self._queries: list[EvalQuery] = []
 
     def add_queries(self, queries: Sequence[EvalQuery]) -> None:
         """Add evaluation queries."""
@@ -268,7 +268,7 @@ class RetrievalEvaluator:
         """
         path = Path(path)
         loaded = 0
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -288,8 +288,8 @@ class RetrievalEvaluator:
     def evaluate(
         self,
         search_fn: SearchFn,
-        k_values: Optional[List[int]] = None,
-        model_name: Optional[str] = None,
+        k_values: list[int] | None = None,
+        model_name: str | None = None,
     ) -> EvalReport:
         """
         Run evaluation on all queries.
@@ -310,12 +310,12 @@ class RetrievalEvaluator:
         max_k = max(k_values)
         start = time.time()
 
-        per_query_results: List[EvalResult] = []
+        per_query_results: list[EvalResult] = []
         rr_scores = []
         ap_scores = []
-        ndcg_scores: Dict[int, List[float]] = {k: [] for k in k_values}
-        prec_scores: Dict[int, List[float]] = {k: [] for k in k_values}
-        rec_scores: Dict[int, List[float]] = {k: [] for k in k_values}
+        ndcg_scores: dict[int, list[float]] = {k: [] for k in k_values}
+        prec_scores: dict[int, list[float]] = {k: [] for k in k_values}
+        rec_scores: dict[int, list[float]] = {k: [] for k in k_values}
 
         for eq in self._queries:
             # Retrieve
@@ -380,19 +380,19 @@ class RetrievalEvaluator:
 class BenchmarkResult:
     """Comparison of multiple models on the same evaluation set."""
 
-    models: List[str]
-    reports: Dict[str, dict]  # model_name -> EvalReport.to_dict()
-    ranking: List[Tuple[str, float]]  # sorted by MRR descending
+    models: list[str]
+    reports: dict[str, dict]  # model_name -> EvalReport.to_dict()
+    ranking: list[tuple[str, float]]  # sorted by MRR descending
     best_model: str
     elapsed_seconds: float
 
     def print_comparison(self) -> None:
         """Print a side-by-side comparison table."""
-        print(f"\n{'='*72}")
+        print(f"\n{'=' * 72}")
         print("  Model Benchmark Comparison")
-        print(f"{'='*72}")
+        print(f"{'=' * 72}")
         print(f"  {'Model':<30} {'MRR':>8} {'MAP':>8} {'NDCG@5':>8} {'R@10':>8}")
-        print(f"  {'—'*30} {'—'*8} {'—'*8} {'—'*8} {'—'*8}")
+        print(f"  {'—' * 30} {'—' * 8} {'—' * 8} {'—' * 8} {'—' * 8}")
 
         for model_name, mrr in self.ranking:
             r = self.reports[model_name]
@@ -400,14 +400,11 @@ class BenchmarkResult:
             ndcg5 = r.get("ndcg", {}).get("5", r.get("ndcg", {}).get(5, 0))
             r10 = r.get("recall", {}).get("10", r.get("recall", {}).get(10, 0))
             marker = " 🏆" if model_name == self.best_model else ""
-            print(
-                f"  {model_name:<30} {mrr:>8.4f} {map_s:>8.4f} "
-                f"{ndcg5:>8.4f} {r10:>8.4f}{marker}"
-            )
+            print(f"  {model_name:<30} {mrr:>8.4f} {map_s:>8.4f} {ndcg5:>8.4f} {r10:>8.4f}{marker}")
 
         print(f"\n  Best model: {self.best_model}")
         print(f"  Total benchmark time: {self.elapsed_seconds:.1f}s")
-        print(f"{'='*72}\n")
+        print(f"{'=' * 72}\n")
 
     def save(self, path: str | Path) -> None:
         """Save benchmark results."""
@@ -444,11 +441,11 @@ class ModelBenchmark:
 
     def __init__(
         self,
-        models: List[str],
-        queries: List[EvalQuery],
-        corpus: List[str],
-        corpus_ids: Optional[List[str]] = None,
-        k_values: Optional[List[int]] = None,
+        models: list[str],
+        queries: list[EvalQuery],
+        corpus: list[str],
+        corpus_ids: list[str] | None = None,
+        k_values: list[int] | None = None,
     ):
         self.models = models
         self.queries = queries
@@ -466,7 +463,7 @@ class ModelBenchmark:
         from sentence_transformers import SentenceTransformer
 
         start = time.time()
-        reports: Dict[str, dict] = {}
+        reports: dict[str, dict] = {}
 
         for model_name in self.models:
             logger.info("Benchmarking model: %s", model_name)
@@ -479,21 +476,24 @@ class ModelBenchmark:
                 show_progress_bar=False,
             )
 
-            def search_fn(query: str, k: int) -> List[str]:
-                q_emb = model.encode(
+            def search_fn(
+                query: str,
+                k: int,
+                _model: SentenceTransformer = model,
+                _corpus_embeddings: np.ndarray = corpus_embeddings,
+            ) -> list[str]:
+                q_emb = _model.encode(
                     query,
                     normalize_embeddings=True,
                     convert_to_numpy=True,
                 ).reshape(1, -1)
-                scores = np.dot(corpus_embeddings, q_emb.T).flatten()
+                scores = np.dot(_corpus_embeddings, q_emb.T).flatten()
                 top_indices = np.argsort(scores)[::-1][:k]
                 return [self.corpus_ids[i] for i in top_indices]
 
             evaluator = RetrievalEvaluator()
             evaluator.add_queries(self.queries)
-            report = evaluator.evaluate(
-                search_fn, k_values=self.k_values, model_name=model_name
-            )
+            report = evaluator.evaluate(search_fn, k_values=self.k_values, model_name=model_name)
             reports[model_name] = report.to_dict()
 
         elapsed = time.time() - start
@@ -525,16 +525,24 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Evaluate retrieval quality")
     parser.add_argument("--queries", required=True, help="JSONL file with eval queries")
-    parser.add_argument("--corpus", required=True, help="JSONL file with corpus documents (one per line: {id, text})")
-    parser.add_argument("--models", nargs="+", default=["all-MiniLM-L6-v2"], help="Models to benchmark")
-    parser.add_argument("--k", nargs="+", type=int, default=[1, 3, 5, 10], help="k values for metrics")
+    parser.add_argument(
+        "--corpus",
+        required=True,
+        help="JSONL file with corpus documents (one per line: {id, text})",
+    )
+    parser.add_argument(
+        "--models", nargs="+", default=["all-MiniLM-L6-v2"], help="Models to benchmark"
+    )
+    parser.add_argument(
+        "--k", nargs="+", type=int, default=[1, 3, 5, 10], help="k values for metrics"
+    )
     parser.add_argument("--output", default="eval_report.json", help="Output report path")
     args = parser.parse_args()
 
     # Load corpus
     corpus_docs = []
     corpus_ids = []
-    with open(args.corpus, "r", encoding="utf-8") as f:
+    with open(args.corpus, encoding="utf-8") as f:
         for line in f:
             obj = json.loads(line.strip())
             corpus_ids.append(obj["id"])
@@ -563,7 +571,7 @@ if __name__ == "__main__":
         model = SentenceTransformer(args.models[0])
         embs = model.encode(corpus_docs, normalize_embeddings=True, convert_to_numpy=True)
 
-        def search(query: str, k: int) -> List[str]:
+        def search(query: str, k: int) -> list[str]:
             q = model.encode(query, normalize_embeddings=True, convert_to_numpy=True).reshape(1, -1)
             scores = np.dot(embs, q.T).flatten()
             top = np.argsort(scores)[::-1][:k]

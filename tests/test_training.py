@@ -7,17 +7,13 @@ and evaluation harness. Uses synthetic data to avoid model downloads.
 
 import json
 import math
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pytest
 
 from evaluation import (
+    BenchmarkResult,
     EvalQuery,
     EvalReport,
-    ModelBenchmark,
     RetrievalEvaluator,
     average_precision,
     dcg_at_k,
@@ -33,7 +29,6 @@ from training import (
     TrainingResult,
     TrainingTriplet,
 )
-
 
 # =========================================================================
 # Metric Unit Tests
@@ -260,25 +255,26 @@ class TestFineTuner:
 
     def test_add_pairs(self):
         tuner = FineTuner()
-        tuner.add_pairs([
-            TrainingPair("q1", "d1"),
-            TrainingPair("q2", "d2"),
-        ])
+        tuner.add_pairs(
+            [
+                TrainingPair("q1", "d1"),
+                TrainingPair("q2", "d2"),
+            ]
+        )
         assert len(tuner._pairs) == 2
 
     def test_add_triplets(self):
         tuner = FineTuner()
-        tuner.add_triplets([
-            TrainingTriplet("q1", "d1", "d2"),
-        ])
+        tuner.add_triplets(
+            [
+                TrainingTriplet("q1", "d1", "d2"),
+            ]
+        )
         assert len(tuner._triplets) == 1
 
     def test_load_pairs_jsonl(self, tmp_path):
         data = tmp_path / "pairs.jsonl"
-        data.write_text(
-            '{"query": "q1", "positive": "d1"}\n'
-            '{"query": "q2", "positive": "d2"}\n'
-        )
+        data.write_text('{"query": "q1", "positive": "d1"}\n{"query": "q2", "positive": "d2"}\n')
         tuner = FineTuner()
         loaded = tuner.load_pairs_jsonl(data)
         assert loaded == 2
@@ -286,9 +282,7 @@ class TestFineTuner:
 
     def test_load_triplets_jsonl(self, tmp_path):
         data = tmp_path / "triplets.jsonl"
-        data.write_text(
-            '{"query": "q1", "positive": "d1", "negative": "d3"}\n'
-        )
+        data.write_text('{"query": "q1", "positive": "d1", "negative": "d3"}\n')
         tuner = FineTuner()
         loaded = tuner.load_triplets_jsonl(data)
         assert loaded == 1
@@ -302,10 +296,7 @@ class TestFineTuner:
     def test_load_skips_blank_lines(self, tmp_path):
         data = tmp_path / "pairs.jsonl"
         data.write_text(
-            '{"query": "q1", "positive": "d1"}\n'
-            "\n"
-            '{"query": "q2", "positive": "d2"}\n'
-            "  \n"
+            '{"query": "q1", "positive": "d1"}\n\n{"query": "q2", "positive": "d2"}\n  \n'
         )
         tuner = FineTuner()
         loaded = tuner.load_pairs_jsonl(data)
@@ -331,14 +322,18 @@ class TestRetrievalEvaluator:
 
     def test_perfect_retrieval(self):
         evaluator = RetrievalEvaluator()
-        evaluator.add_queries([
-            EvalQuery("q1", ["d1", "d2"]),
-            EvalQuery("q2", ["d3"]),
-        ])
-        search = self._dummy_search({
-            "q1": ["d1", "d2", "d4"],
-            "q2": ["d3", "d5"],
-        })
+        evaluator.add_queries(
+            [
+                EvalQuery("q1", ["d1", "d2"]),
+                EvalQuery("q2", ["d3"]),
+            ]
+        )
+        search = self._dummy_search(
+            {
+                "q1": ["d1", "d2", "d4"],
+                "q2": ["d3", "d5"],
+            }
+        )
         report = evaluator.evaluate(search, k_values=[1, 3])
 
         assert report.mrr == 1.0
@@ -348,9 +343,11 @@ class TestRetrievalEvaluator:
 
     def test_no_relevant_found(self):
         evaluator = RetrievalEvaluator()
-        evaluator.add_queries([
-            EvalQuery("q1", ["d1"]),
-        ])
+        evaluator.add_queries(
+            [
+                EvalQuery("q1", ["d1"]),
+            ]
+        )
         search = self._dummy_search({"q1": ["d2", "d3"]})
         report = evaluator.evaluate(search, k_values=[1, 3])
 
@@ -360,9 +357,11 @@ class TestRetrievalEvaluator:
 
     def test_mixed_results(self):
         evaluator = RetrievalEvaluator()
-        evaluator.add_queries([
-            EvalQuery("q1", ["d2"]),  # relevant at position 2
-        ])
+        evaluator.add_queries(
+            [
+                EvalQuery("q1", ["d2"]),  # relevant at position 2
+            ]
+        )
         search = self._dummy_search({"q1": ["d1", "d2", "d3"]})
         report = evaluator.evaluate(search, k_values=[1, 3])
 
@@ -405,13 +404,15 @@ class TestRetrievalEvaluator:
     def test_graded_ndcg(self):
         """Graded relevance passes through to NDCG computation."""
         evaluator = RetrievalEvaluator()
-        evaluator.add_queries([
-            EvalQuery(
-                query="q1",
-                relevant_docs=["d1", "d2"],
-                relevance_grades={"d1": 3, "d2": 1},
-            )
-        ])
+        evaluator.add_queries(
+            [
+                EvalQuery(
+                    query="q1",
+                    relevant_docs=["d1", "d2"],
+                    relevance_grades={"d1": 3, "d2": 1},
+                )
+            ]
+        )
         # Perfect order: d1(3), d2(1)
         perfect_search = self._dummy_search({"q1": ["d1", "d2", "d3"]})
         report = evaluator.evaluate(perfect_search, k_values=[2])

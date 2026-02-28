@@ -6,7 +6,6 @@ comparison, best-run selection, model lineage, and persistence.
 """
 
 import json
-import os
 import shutil
 import tempfile
 import time
@@ -18,10 +17,8 @@ from experiment_tracker import (
     ActiveRun,
     ExperimentTracker,
     MetricEntry,
-    RunComparison,
     RunRecord,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -261,10 +258,9 @@ class TestExperimentTracker:
         assert data["final_metrics"]["mrr"] == 0.9
 
     def test_run_failure_recorded(self, tracker):
-        with pytest.raises(ValueError):
-            with tracker.start_run("fail-test") as run:
-                run.log_metric("loss", 0.5)
-                raise ValueError("Intentional failure")
+        with pytest.raises(ValueError), tracker.start_run("fail-test") as run:
+            run.log_metric("loss", 0.5)
+            raise ValueError("Intentional failure")
 
         assert tracker.run_count == 1
         runs = tracker.list_runs()
@@ -283,9 +279,8 @@ class TestExperimentTracker:
         with tracker.start_run("good") as run:
             run.log_metric("x", 1.0)
 
-        with pytest.raises(RuntimeError):
-            with tracker.start_run("bad") as run:
-                raise RuntimeError("boom")
+        with pytest.raises(RuntimeError), tracker.start_run("bad") as run:
+            raise RuntimeError("boom")
 
         completed = tracker.list_runs(status="completed")
         failed = tracker.list_runs(status="failed")
@@ -473,10 +468,9 @@ class TestBestRun:
         with tracker.start_run("good") as run:
             run.log_metric("mrr", 0.5)
 
-        with pytest.raises(ZeroDivisionError):
-            with tracker.start_run("better-but-failed") as run:
-                run.log_metric("mrr", 0.99)
-                raise ZeroDivisionError("crash")
+        with pytest.raises(ZeroDivisionError), tracker.start_run("better-but-failed") as run:
+            run.log_metric("mrr", 0.99)
+            raise ZeroDivisionError("crash")
 
         best = tracker.best_run("mrr")
         assert best.name == "good"
@@ -505,7 +499,8 @@ class TestMetricHistory:
         history = tracker.metric_history("training", "loss")
         assert len(history) == 5
         assert history[0] == (0, 1.0)
-        assert history[4] == (4, 0.2)
+        assert history[4][0] == 4
+        assert history[4][1] == pytest.approx(0.2)
 
     def test_history_nonexistent(self, tracker):
         history = tracker.metric_history("ghost", "loss")
