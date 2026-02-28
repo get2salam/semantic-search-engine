@@ -13,7 +13,6 @@ Usage:
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -21,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from config import Settings, get_settings
+from config import get_settings
 from semantic_search import SemanticSearchEngine
 
 # ---------------------------------------------------------------------------
@@ -71,15 +70,13 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=10_000, description="Search query text")
     top_k: int = Field(default=5, ge=1, description="Number of results to return")
-    threshold: Optional[float] = Field(
+    threshold: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Minimum similarity score"
     )
 
     model_config = {
         "json_schema_extra": {
-            "examples": [
-                {"query": "artificial intelligence", "top_k": 3, "threshold": 0.3}
-            ]
+            "examples": [{"query": "artificial intelligence", "top_k": 3, "threshold": 0.3}]
         }
     }
 
@@ -144,7 +141,7 @@ class HealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 # Module-level engine reference (populated during lifespan)
-engine: Optional[SemanticSearchEngine] = None
+engine: SemanticSearchEngine | None = None
 
 
 @asynccontextmanager
@@ -165,9 +162,7 @@ async def lifespan(app: FastAPI):
     if settings.index_path:
         try:
             engine = SemanticSearchEngine.load(settings.index_path)
-            logger.info(
-                "Loaded index from %s (%d docs)", settings.index_path, len(engine)
-            )
+            logger.info("Loaded index from %s (%d docs)", settings.index_path, len(engine))
         except Exception as exc:
             logger.warning("Could not load index from %s: %s", settings.index_path, exc)
 
@@ -332,9 +327,7 @@ async def search(body: SearchRequest):
     eng = _get_engine()
 
     if len(eng) == 0:
-        raise HTTPException(
-            status_code=400, detail="No documents indexed. Add documents first."
-        )
+        raise HTTPException(status_code=400, detail="No documents indexed. Add documents first.")
 
     top_k = min(body.top_k, settings.max_top_k)
 
@@ -365,17 +358,12 @@ async def search_batch(body: BatchSearchRequest):
     eng = _get_engine()
 
     if len(eng) == 0:
-        raise HTTPException(
-            status_code=400, detail="No documents indexed. Add documents first."
-        )
+        raise HTTPException(status_code=400, detail="No documents indexed. Add documents first.")
 
     if len(body.queries) > settings.max_batch_size:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Batch size {len(body.queries)} exceeds maximum "
-                f"of {settings.max_batch_size}"
-            ),
+            detail=(f"Batch size {len(body.queries)} exceeds maximum of {settings.max_batch_size}"),
         )
 
     top_k = min(body.top_k, settings.max_top_k)
@@ -412,7 +400,7 @@ async def search_batch(body: BatchSearchRequest):
 async def search_get(
     q: str = Query(..., min_length=1, max_length=10_000, description="Search query"),
     top_k: int = Query(default=5, ge=1, le=50, description="Number of results"),
-    threshold: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    threshold: float | None = Query(default=None, ge=0.0, le=1.0),
 ):
     """
     GET-based search endpoint for simple integrations and browser testing.

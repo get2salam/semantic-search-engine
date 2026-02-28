@@ -31,18 +31,15 @@ Usage:
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 import logging
-import os
 import shutil
-import time
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +54,8 @@ class MetricEntry:
     """A single metric observation at a given step."""
 
     value: float
-    step: Optional[int] = None
-    timestamp: Optional[str] = None
+    step: int | None = None
+    timestamp: str | None = None
 
     def to_dict(self) -> dict:
         return {"value": self.value, "step": self.step, "timestamp": self.timestamp}
@@ -71,33 +68,33 @@ class RunRecord:
     run_id: str
     name: str
     status: str = "created"  # created | running | completed | failed
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
     # Timing
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
-    duration_seconds: Optional[float] = None
+    start_time: str | None = None
+    end_time: str | None = None
+    duration_seconds: float | None = None
 
     # Data
-    params: Dict[str, Any] = field(default_factory=dict)
-    metrics: Dict[str, List[dict]] = field(default_factory=dict)
-    final_metrics: Dict[str, float] = field(default_factory=dict)
-    artifacts: List[str] = field(default_factory=list)
+    params: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, list[dict]] = field(default_factory=dict)
+    final_metrics: dict[str, float] = field(default_factory=dict)
+    artifacts: list[str] = field(default_factory=list)
 
     # Model versioning
-    model_version: Optional[str] = None
-    model_hash: Optional[str] = None
-    parent_run_id: Optional[str] = None
+    model_version: str | None = None
+    model_hash: str | None = None
+    parent_run_id: str | None = None
 
     # Notes
-    description: Optional[str] = None
-    notes: List[str] = field(default_factory=list)
+    description: str | None = None
+    notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RunRecord":
+    def from_dict(cls, data: dict) -> RunRecord:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -117,7 +114,7 @@ class ActiveRun:
     def __init__(self, record: RunRecord, storage_dir: Path):
         self._record = record
         self._storage_dir = storage_dir
-        self._step_counter: Dict[str, int] = {}
+        self._step_counter: dict[str, int] = {}
 
     @property
     def run_id(self) -> str:
@@ -138,7 +135,7 @@ class ActiveRun:
         self._record.params[key] = value
         logger.debug("Param: %s = %s", key, value)
 
-    def log_params(self, params: Dict[str, Any]) -> None:
+    def log_params(self, params: dict[str, Any]) -> None:
         """Log multiple parameters at once."""
         self._record.params.update(params)
         logger.debug("Logged %d params", len(params))
@@ -149,7 +146,7 @@ class ActiveRun:
         self,
         key: str,
         value: float,
-        step: Optional[int] = None,
+        step: int | None = None,
     ) -> None:
         """
         Log a metric value, optionally at a specific step.
@@ -174,14 +171,14 @@ class ActiveRun:
 
         logger.debug("Metric: %s = %.6f (step %d)", key, value, step)
 
-    def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None) -> None:
+    def log_metrics(self, metrics: dict[str, float], step: int | None = None) -> None:
         """Log multiple metrics at once."""
         for key, value in metrics.items():
             self.log_metric(key, value, step=step)
 
     # -- Artifacts ------------------------------------------------------------
 
-    def log_artifact(self, source_path: str, dest_name: Optional[str] = None) -> str:
+    def log_artifact(self, source_path: str, dest_name: str | None = None) -> str:
         """
         Copy an artifact file into the run's artifact directory.
 
@@ -286,9 +283,9 @@ class ActiveRun:
 class RunComparison:
     """Side-by-side comparison of multiple experiment runs."""
 
-    runs: List[RunRecord]
-    metric_keys: List[str]
-    param_keys: List[str]
+    runs: list[RunRecord]
+    metric_keys: list[str]
+    param_keys: list[str]
 
     def to_dict(self) -> dict:
         rows = []
@@ -316,9 +313,9 @@ class RunComparison:
         name_w = max(len(r.name) for r in self.runs)
         name_w = max(name_w, 6)
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("  Experiment Comparison")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         # Header
         header = f"  {'Run':<{name_w}}  {'Status':<10}"
@@ -328,11 +325,11 @@ class RunComparison:
             header += f"  {mk:>10}"
         print(header)
 
-        sep = f"  {'—'*name_w}  {'—'*10}"
-        for pk in self.param_keys:
-            sep += f"  {'—'*12}"
-        for mk in self.metric_keys:
-            sep += f"  {'—'*10}"
+        sep = f"  {'—' * name_w}  {'—' * 10}"
+        for _pk in self.param_keys:
+            sep += f"  {'—' * 12}"
+        for _mk in self.metric_keys:
+            sep += f"  {'—' * 10}"
         print(sep)
 
         # Rows
@@ -349,9 +346,9 @@ class RunComparison:
                     row += f"  {'—':>10}"
             print(row)
 
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
-    def diff(self, baseline_name: str) -> Dict[str, Dict[str, Optional[float]]]:
+    def diff(self, baseline_name: str) -> dict[str, dict[str, float | None]]:
         """
         Compute metric deltas relative to a baseline run.
 
@@ -368,11 +365,11 @@ class RunComparison:
         if baseline is None:
             raise ValueError(f"Baseline run '{baseline_name}' not found")
 
-        diffs: Dict[str, Dict[str, Optional[float]]] = {}
+        diffs: dict[str, dict[str, float | None]] = {}
         for run in self.runs:
             if run.name == baseline_name:
                 continue
-            run_diff: Dict[str, Optional[float]] = {}
+            run_diff: dict[str, float | None] = {}
             for mk in self.metric_keys:
                 base_val = baseline.final_metrics.get(mk)
                 run_val = run.final_metrics.get(mk)
@@ -416,18 +413,18 @@ class ExperimentTracker:
         tracker.list_runs()
     """
 
-    def __init__(self, base_dir: Union[str, Path] = "experiments"):
+    def __init__(self, base_dir: str | Path = "experiments"):
         self.base_dir = Path(base_dir)
         self.runs_dir = self.base_dir / "runs"
         self.runs_dir.mkdir(parents=True, exist_ok=True)
-        self._runs_cache: Dict[str, RunRecord] = {}
+        self._runs_cache: dict[str, RunRecord] = {}
         self._load_existing()
 
     def _load_existing(self) -> None:
         """Load all existing run records from disk."""
         for json_file in sorted(self.runs_dir.glob("*.json")):
             try:
-                with open(json_file, "r", encoding="utf-8") as f:
+                with open(json_file, encoding="utf-8") as f:
                     data = json.load(f)
                 record = RunRecord.from_dict(data)
                 self._runs_cache[record.run_id] = record
@@ -454,9 +451,9 @@ class ExperimentTracker:
     def start_run(
         self,
         name: str,
-        tags: Optional[List[str]] = None,
-        description: Optional[str] = None,
-        parent_run_id: Optional[str] = None,
+        tags: list[str] | None = None,
+        description: str | None = None,
+        parent_run_id: str | None = None,
     ):
         """
         Start a new experiment run as a context manager.
@@ -506,11 +503,11 @@ class ExperimentTracker:
 
     # -- Querying -------------------------------------------------------------
 
-    def get_run(self, run_id: str) -> Optional[RunRecord]:
+    def get_run(self, run_id: str) -> RunRecord | None:
         """Get a run by ID."""
         return self._runs_cache.get(run_id)
 
-    def get_run_by_name(self, name: str) -> Optional[RunRecord]:
+    def get_run_by_name(self, name: str) -> RunRecord | None:
         """Get the most recent run with the given name."""
         matches = [r for r in self._runs_cache.values() if r.name == name]
         if not matches:
@@ -519,10 +516,10 @@ class ExperimentTracker:
 
     def list_runs(
         self,
-        status: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-    ) -> List[RunRecord]:
+        status: str | None = None,
+        tags: list[str] | None = None,
+        limit: int | None = None,
+    ) -> list[RunRecord]:
         """
         List runs with optional filters.
 
@@ -575,9 +572,9 @@ class ExperimentTracker:
 
     def compare(
         self,
-        names_or_ids: List[str],
-        metric_keys: Optional[List[str]] = None,
-        param_keys: Optional[List[str]] = None,
+        names_or_ids: list[str],
+        metric_keys: list[str] | None = None,
+        param_keys: list[str] | None = None,
     ) -> RunComparison:
         """
         Compare multiple runs side-by-side.
@@ -590,7 +587,7 @@ class ExperimentTracker:
         Returns:
             RunComparison object with tabular output support.
         """
-        runs: List[RunRecord] = []
+        runs: list[RunRecord] = []
         for identifier in names_or_ids:
             run = self.get_run(identifier) or self.get_run_by_name(identifier)
             if run:
@@ -623,8 +620,8 @@ class ExperimentTracker:
         metric: str,
         higher_is_better: bool = True,
         status: str = "completed",
-        tags: Optional[List[str]] = None,
-    ) -> Optional[RunRecord]:
+        tags: list[str] | None = None,
+    ) -> RunRecord | None:
         """
         Find the best run by a specific metric.
 
@@ -643,9 +640,7 @@ class ExperimentTracker:
         if not candidates:
             return None
 
-        return (max if higher_is_better else min)(
-            candidates, key=lambda r: r.final_metrics[metric]
-        )
+        return (max if higher_is_better else min)(candidates, key=lambda r: r.final_metrics[metric])
 
     # -- Metric History -------------------------------------------------------
 
@@ -653,7 +648,7 @@ class ExperimentTracker:
         self,
         run_name_or_id: str,
         metric_key: str,
-    ) -> List[Tuple[int, float]]:
+    ) -> list[tuple[int, float]]:
         """
         Get the step-by-step history of a metric for a run.
 
@@ -671,14 +666,14 @@ class ExperimentTracker:
 
     # -- Model Registry -------------------------------------------------------
 
-    def model_lineage(self, run_name_or_id: str) -> List[RunRecord]:
+    def model_lineage(self, run_name_or_id: str) -> list[RunRecord]:
         """
         Trace the model lineage from a run back through its parents.
 
         Returns:
             List of RunRecords from newest to oldest in the lineage chain.
         """
-        chain: List[RunRecord] = []
+        chain: list[RunRecord] = []
         current = self.get_run(run_name_or_id) or self.get_run_by_name(run_name_or_id)
 
         visited: set = set()
@@ -694,8 +689,8 @@ class ExperimentTracker:
 
     def latest_model(
         self,
-        tags: Optional[List[str]] = None,
-    ) -> Optional[RunRecord]:
+        tags: list[str] | None = None,
+    ) -> RunRecord | None:
         """
         Get the most recent completed run with a model version.
 
@@ -709,7 +704,7 @@ class ExperimentTracker:
 
     # -- Export / Import ------------------------------------------------------
 
-    def export_summary(self, path: Union[str, Path]) -> None:
+    def export_summary(self, path: str | Path) -> None:
         """
         Export a summary of all runs as a single JSON file.
 
@@ -803,18 +798,16 @@ if __name__ == "__main__":
     if args.command == "list":
         tracker = ExperimentTracker(args.dir)
         runs = tracker.list_runs(status=args.status, tags=args.tags, limit=args.limit)
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"  Experiment Runs ({len(runs)} shown)")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         for r in runs:
             tags = f" [{', '.join(r.tags)}]" if r.tags else ""
             dur = f" ({r.duration_seconds:.1f}s)" if r.duration_seconds else ""
             ver = f" v{r.model_version}" if r.model_version else ""
             print(f"  [{r.status:>9}] {r.name}{tags}{ver}{dur}")
             if r.final_metrics:
-                metrics_str = ", ".join(
-                    f"{k}={v:.4f}" for k, v in sorted(r.final_metrics.items())
-                )
+                metrics_str = ", ".join(f"{k}={v:.4f}" for k, v in sorted(r.final_metrics.items()))
                 print(f"             {metrics_str}")
         print()
 

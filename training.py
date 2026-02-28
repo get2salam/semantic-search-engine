@@ -27,9 +27,9 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field, asdict
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import List, Optional, Sequence
 
 import numpy as np
 
@@ -98,10 +98,10 @@ class TrainingResult:
     epochs_completed: int
     training_samples: int
     final_loss: float
-    best_score: Optional[float]
+    best_score: float | None
     elapsed_seconds: float
     config: dict = field(default_factory=dict)
-    fold_results: Optional[List[dict]] = None
+    fold_results: list[dict] | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -133,7 +133,7 @@ def mine_hard_negatives(
     model_name: str = "all-MiniLM-L6-v2",
     negatives_per_pair: int = 1,
     pool_size: int = 50,
-) -> List[TrainingTriplet]:
+) -> list[TrainingTriplet]:
     """
     Generate triplets by mining hard negatives from a pool of documents.
 
@@ -159,7 +159,10 @@ def mine_hard_negatives(
     # Collect all positive documents as the negative candidate pool
     all_positives = [p.positive for p in pairs]
     pool_embeddings = model.encode(
-        all_positives, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False,
+        all_positives,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        show_progress_bar=False,
     )
 
     query_embeddings = model.encode(
@@ -169,7 +172,7 @@ def mine_hard_negatives(
         show_progress_bar=False,
     )
 
-    triplets: List[TrainingTriplet] = []
+    triplets: list[TrainingTriplet] = []
 
     for idx, pair in enumerate(pairs):
         # Cosine similarities between this query and all pool documents
@@ -219,10 +222,10 @@ class FineTuner:
         result = tuner.train()
     """
 
-    def __init__(self, config: Optional[TrainingConfig] = None):
+    def __init__(self, config: TrainingConfig | None = None):
         self.config = config or TrainingConfig()
-        self._pairs: List[TrainingPair] = []
-        self._triplets: List[TrainingTriplet] = []
+        self._pairs: list[TrainingPair] = []
+        self._triplets: list[TrainingTriplet] = []
 
     # -- Data loading ---------------------------------------------------------
 
@@ -247,15 +250,13 @@ class FineTuner:
         """
         path = Path(path)
         loaded = 0
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
                 obj = json.loads(line)
-                self._pairs.append(
-                    TrainingPair(query=obj["query"], positive=obj["positive"])
-                )
+                self._pairs.append(TrainingPair(query=obj["query"], positive=obj["positive"]))
                 loaded += 1
         logger.info("Loaded %d pairs from %s", loaded, path)
         return loaded
@@ -271,7 +272,7 @@ class FineTuner:
         """
         path = Path(path)
         loaded = 0
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -297,16 +298,10 @@ class FineTuner:
         examples = []
 
         for pair in self._pairs:
-            examples.append(
-                InputExample(texts=[pair.query, pair.positive], label=1.0)
-            )
+            examples.append(InputExample(texts=[pair.query, pair.positive], label=1.0))
 
         for triplet in self._triplets:
-            examples.append(
-                InputExample(
-                    texts=[triplet.query, triplet.positive, triplet.negative]
-                )
-            )
+            examples.append(InputExample(texts=[triplet.query, triplet.positive, triplet.negative]))
 
         return examples
 
@@ -317,7 +312,11 @@ class FineTuner:
         cfg = self.config
 
         if self._triplets and cfg.loss_type == "triplet":
-            return losses.TripletLoss(model=model, distance_metric=losses.TripletDistanceMetric.COSINE, triplet_margin=cfg.margin)
+            return losses.TripletLoss(
+                model=model,
+                distance_metric=losses.TripletDistanceMetric.COSINE,
+                triplet_margin=cfg.margin,
+            )
 
         if cfg.loss_type == "contrastive":
             return losses.ContrastiveLoss(model=model, margin=cfg.margin)
@@ -352,9 +351,7 @@ class FineTuner:
         if self.config.cv_folds > 1:
             return self._train_cv()
 
-        return self._train_single(
-            self._pairs, self._triplets, self.config.output_dir
-        )
+        return self._train_single(self._pairs, self._triplets, self.config.output_dir)
 
     def _train_single(
         self,
@@ -363,7 +360,7 @@ class FineTuner:
         output_dir: str,
     ) -> TrainingResult:
         """Single training run (no cross-validation)."""
-        from sentence_transformers import SentenceTransformer, InputExample
+        from sentence_transformers import InputExample, SentenceTransformer
         from torch.utils.data import DataLoader
 
         cfg = self.config
@@ -371,7 +368,11 @@ class FineTuner:
 
         logger.info(
             "Starting training: model=%s, epochs=%d, lr=%s, pairs=%d, triplets=%d",
-            cfg.base_model, cfg.epochs, cfg.learning_rate, len(pairs), len(triplets),
+            cfg.base_model,
+            cfg.epochs,
+            cfg.learning_rate,
+            len(pairs),
+            len(triplets),
         )
 
         # Load base model
@@ -400,9 +401,7 @@ class FineTuner:
             evaluator = self._create_evaluator(pairs[:eval_size])
 
         # Train
-        warmup_steps = int(
-            len(train_dataloader) * cfg.epochs * cfg.warmup_ratio
-        )
+        warmup_steps = int(len(train_dataloader) * cfg.epochs * cfg.warmup_ratio)
 
         model.fit(
             train_objectives=[(train_dataloader, loss)],
@@ -461,7 +460,7 @@ class FineTuner:
             # Split
             val_start = fold * fold_size
             val_end = val_start + fold_size if fold < k - 1 else len(all_pairs)
-            val_pairs = all_pairs[val_start:val_end]
+            all_pairs[val_start:val_end]
             train_pairs = all_pairs[:val_start] + all_pairs[val_end:]
 
             fold_dir = f"{cfg.output_dir}/fold_{fold + 1}"
@@ -471,17 +470,15 @@ class FineTuner:
         elapsed = time.time() - start
 
         # Aggregate
-        scores = [
-            fr["best_score"]
-            for fr in fold_results
-            if fr.get("best_score") is not None
-        ]
+        scores = [fr["best_score"] for fr in fold_results if fr.get("best_score") is not None]
         avg_score = round(np.mean(scores), 4) if scores else None
         std_score = round(np.std(scores), 4) if scores else None
 
         logger.info(
             "CV complete: avg_score=%.4f ± %.4f across %d folds",
-            avg_score or 0, std_score or 0, k,
+            avg_score or 0,
+            std_score or 0,
+            k,
         )
 
         final = TrainingResult(
@@ -531,7 +528,7 @@ if __name__ == "__main__":
     tuner = FineTuner(config)
 
     # Detect format from first line
-    with open(args.data, "r") as f:
+    with open(args.data) as f:
         sample = json.loads(f.readline())
 
     if "negative" in sample:
@@ -540,8 +537,8 @@ if __name__ == "__main__":
         tuner.load_pairs_jsonl(args.data)
 
     result = tuner.train()
-    print(f"\n{'='*50}")
-    print(f"Training complete!")
+    print(f"\n{'=' * 50}")
+    print("Training complete!")
     print(f"  Model saved to: {result.model_path}")
     print(f"  Best score: {result.best_score}")
     print(f"  Time: {result.elapsed_seconds:.1f}s")

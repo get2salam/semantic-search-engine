@@ -111,9 +111,7 @@ class TestSearchEndpoints:
             assert result["score"] >= 0.5
 
     def test_search_results_sorted_by_score(self, seeded_client):
-        resp = seeded_client.post(
-            "/search", json={"query": "machine learning", "top_k": 5}
-        )
+        resp = seeded_client.post("/search", json={"query": "machine learning", "top_k": 5})
         scores = [r["score"] for r in resp.json()["results"]]
         assert scores == sorted(scores, reverse=True)
 
@@ -151,9 +149,7 @@ class TestRequestValidation:
 
     def test_batch_too_large_returns_400(self, seeded_client):
         queries = [f"query_{i}" for i in range(200)]
-        resp = seeded_client.post(
-            "/search/batch", json={"queries": queries, "top_k": 1}
-        )
+        resp = seeded_client.post("/search/batch", json={"queries": queries, "top_k": 1})
         assert resp.status_code == 400
 
 

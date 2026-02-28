@@ -6,7 +6,6 @@ Follows 12-factor app methodology for configuration management.
 """
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -32,9 +31,7 @@ class Settings(BaseSettings):
     )
     default_top_k: int = Field(default=5, ge=1, le=100, description="Default number of results")
     max_top_k: int = Field(default=50, ge=1, le=500, description="Maximum allowed top_k")
-    max_batch_size: int = Field(
-        default=100, ge=1, le=1000, description="Maximum batch query size"
-    )
+    max_batch_size: int = Field(default=100, ge=1, le=1000, description="Maximum batch query size")
 
     # --- API Server ---
     host: str = Field(default="0.0.0.0", description="Server bind host")
@@ -46,10 +43,10 @@ class Settings(BaseSettings):
     )
 
     # --- Persistence ---
-    index_path: Optional[str] = Field(
+    index_path: str | None = Field(
         default=None, description="Path to load a pre-built index on startup"
     )
-    auto_save_path: Optional[str] = Field(
+    auto_save_path: str | None = Field(
         default=None, description="Path to auto-save the index after modifications"
     )
 
@@ -61,7 +58,7 @@ class Settings(BaseSettings):
     }
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """
     Cached settings singleton.
