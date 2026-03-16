@@ -72,3 +72,10 @@ known-first-party = ["semantic_search"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Redirect pytest tmp dir to a repo-local path to avoid Windows
+# "Access Denied" errors when the OS username contains spaces
+# (e.g. "Abdul Salam" → C:\...\pytest-of-Abdul Salam fails).
+tmp_path_retention_policy = "failed"
+# NOTE: `basetemp` cannot be set here (pytest limitation); it must be
+# passed via --basetemp CLI flag or a conftest.py hook.  The conftest.py
+# in this repo sets it automatically when the default path is unsafe.
