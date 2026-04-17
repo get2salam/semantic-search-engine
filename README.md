@@ -14,6 +14,7 @@ Ships with a **REST API** (FastAPI), **Docker** support, and **CI/CD** pipeline 
 ## ⚡ Features
 
 - 🔎 **Fast & Efficient** — FAISS-powered vector similarity search
+- 🧭 **MMR Diversification** — Optional Maximal Marginal Relevance re-ranking to cut near-duplicate results
 - 🤖 **State-of-the-Art Embeddings** — Uses `all-MiniLM-L6-v2` (384-dim, blazing fast)
 - 🌐 **REST API** — Production-grade FastAPI with OpenAPI docs, validation, CORS
 - 🎯 **Fine-Tuning Pipeline** — Domain-adaptive training with contrastive/triplet loss and k-fold CV
@@ -134,6 +135,35 @@ curl -X POST http://localhost:8000/search/batch \
   -H "Content-Type: application/json" \
   -d '{"queries": ["AI models", "web development"], "top_k": 3}'
 ```
+
+## 🧭 Diversified Results (MMR)
+
+Dense retrievers cluster near-duplicates in the top-k — five phrasings of the
+same idea instead of five distinct ideas. The `mmr_lambda` parameter applies
+[Maximal Marginal Relevance](https://dl.acm.org/doi/10.1145/290941.291025)
+(Carbonell & Goldstein, 1998) to re-rank a larger candidate pool with an
+explicit diversity term:
+
+```python
+# Pure relevance (default)
+engine.search("climate change", top_k=5)
+
+# Balanced relevance + diversity
+engine.search("climate change", top_k=5, mmr_lambda=0.5)
+
+# Max diversity — useful for "show me a spread of topics"
+engine.search("climate change", top_k=5, mmr_lambda=0.1, mmr_candidate_k=50)
+```
+
+- `mmr_lambda=1.0` → identical to the default (pure relevance)
+- `mmr_lambda=0.0` → ignores the query after the first pick (maximum diversity)
+- `mmr_lambda=0.5` → balanced (recommended starting point)
+- `mmr_candidate_k` controls the candidate pool size; larger pools give MMR
+  more room to diversify at the cost of extra compute (defaults to
+  `max(4·top_k, 25)`).
+
+Returned similarity scores remain on the cosine scale — MMR only changes
+*which* docs are returned, not how they are scored.
 
 ## ⚙️ Configuration
 
@@ -291,6 +321,7 @@ python experiment_tracker.py export --output results.json
 semantic-search-engine/
 ├── api.py                    # FastAPI REST application
 ├── semantic_search.py        # Core search engine class
+├── mmr.py                    # Maximal Marginal Relevance diversifier
 ├── training.py               # Fine-tuning pipeline (contrastive/triplet/CV)
 ├── evaluation.py             # Retrieval metrics & multi-model benchmarking
 ├── experiment_tracker.py     # MLOps experiment tracking & model registry

@@ -129,7 +129,12 @@ class SemanticSearchEngine:
         self.index.add(self.embeddings.astype(np.float32))
 
     def search(
-        self, query: str, top_k: int = 5, threshold: float | None = None
+        self,
+        query: str,
+        top_k: int = 5,
+        threshold: float | None = None,
+        mmr_lambda: float | None = None,
+        mmr_candidate_k: int | None = None,
     ) -> list[tuple[str, float]]:
         """
         Search for documents similar to the query.
@@ -138,9 +143,18 @@ class SemanticSearchEngine:
             query: The search query text
             top_k: Number of results to return
             threshold: Minimum similarity score (0-1). Results below this are filtered.
+            mmr_lambda: If set, apply Maximal Marginal Relevance diversification
+                to the candidate pool. Value in ``[0, 1]``: ``1.0`` ≈ pure
+                relevance (same as no MMR), ``0.0`` = maximum diversity, ``0.5``
+                balanced. ``None`` (default) disables MMR entirely.
+            mmr_candidate_k: Size of the candidate pool to pull before MMR
+                re-ranking. Defaults to ``max(4 * top_k, 25)``. Ignored when
+                ``mmr_lambda`` is ``None``. Larger pools give MMR more room to
+                diversify but cost more compute.
 
         Returns:
             List of (document, similarity_score) tuples, sorted by relevance
+            (or by MMR selection order when ``mmr_lambda`` is set).
         """
         if not self.documents:
             return []
@@ -150,24 +164,49 @@ class SemanticSearchEngine:
             query, normalize_embeddings=self.normalize_embeddings, convert_to_numpy=True
         ).reshape(1, -1)
 
+        # Determine how many raw candidates to pull. MMR re-ranks a larger pool
+        # and then trims to top_k; without MMR we fetch exactly top_k.
+        use_mmr = mmr_lambda is not None
+        if use_mmr:
+            pool_k = mmr_candidate_k if mmr_candidate_k is not None else max(4 * top_k, 25)
+            fetch_k = min(pool_k, len(self.documents))
+        else:
+            fetch_k = min(top_k, len(self.documents))
+
         # Search
         if self.use_faiss and self.index is not None:
-            scores, indices = self.index.search(
-                query_embedding.astype(np.float32), min(top_k, len(self.documents))
-            )
+            scores, indices = self.index.search(query_embedding.astype(np.float32), fetch_k)
             scores = scores[0]
             indices = indices[0]
         else:
             # Numpy fallback - compute all similarities
             scores = np.dot(self.embeddings, query_embedding.T).flatten()
-            indices = np.argsort(scores)[::-1][:top_k]
+            indices = np.argsort(scores)[::-1][:fetch_k]
             scores = scores[indices]
+
+        # Drop FAISS sentinel -1 indices before MMR sees them
+        valid_mask = indices >= 0
+        indices = indices[valid_mask]
+        scores = scores[valid_mask]
+
+        # Optional MMR diversification over the candidate pool
+        if use_mmr and len(indices) > 0:
+            from mmr import mmr_select
+
+            cand_embeddings = self.embeddings[indices]
+            selected_local = mmr_select(
+                query_embedding=query_embedding.reshape(-1),
+                candidate_embeddings=cand_embeddings,
+                top_k=top_k,
+                lambda_mult=mmr_lambda,
+            )
+            # Remap local candidate indices back to the original pool order.
+            indices = indices[selected_local]
+            scores = scores[selected_local]
 
         # Build results
         results = []
         for idx, score in zip(indices, scores, strict=False):
-            if idx < 0:  # FAISS returns -1 for missing results
-                continue
             if threshold is not None and score < threshold:
                 continue
             results.append((self.documents[idx], float(score)))
