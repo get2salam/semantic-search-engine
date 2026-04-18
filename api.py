@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from config import get_settings
@@ -27,8 +27,36 @@ from logging_config import (
     reset_request_id,
     set_request_id,
 )
+from metrics import MetricsRegistry
 from rate_limit import TokenBucketRateLimiter
 from semantic_search import SemanticSearchEngine
+
+# ---------------------------------------------------------------------------
+# Metrics registry
+# ---------------------------------------------------------------------------
+registry = MetricsRegistry()
+REQ_TOTAL = registry.counter(
+    "sse_requests_total",
+    "Total API requests handled, labelled by method, path, and status",
+    labels=("method", "path", "status"),
+)
+REQ_LATENCY = registry.histogram(
+    "sse_request_latency_seconds",
+    "API request latency in seconds",
+    labels=("method", "path"),
+)
+SEARCHES_TOTAL = registry.counter(
+    "sse_searches_total",
+    "Total /search requests (including GET alias and batch children)",
+)
+DOCS_INDEXED = registry.gauge(
+    "sse_documents_indexed",
+    "Current number of documents in the search index",
+)
+RATE_LIMITED_TOTAL = registry.counter(
+    "sse_rate_limited_total",
+    "Total requests rejected by the rate limiter",
+)
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -265,6 +293,7 @@ async def request_timing_middleware(request: Request, call_next):
             key = _client_key(request)
             if not limiter.allow(key):
                 retry_after = max(1, int(limiter.retry_after_seconds(key)))
+                RATE_LIMITED_TOTAL.inc()
                 logger.warning(
                     "rate_limited", extra={"client": key, "path": request.url.path}
                 )
@@ -279,7 +308,8 @@ async def request_timing_middleware(request: Request, call_next):
 
         start = time.perf_counter()
         response = await call_next(request)
-        elapsed_ms = (time.perf_counter() - start) * 1000
+        elapsed_s = time.perf_counter() - start
+        elapsed_ms = elapsed_s * 1000
 
         response.headers["Server-Timing"] = f"total;dur={elapsed_ms:.1f}"
         response.headers["X-Request-Time-Ms"] = f"{elapsed_ms:.1f}"
@@ -289,11 +319,17 @@ async def request_timing_middleware(request: Request, call_next):
             for header, value in _SECURITY_HEADERS.items():
                 response.headers.setdefault(header, value)
 
+        # Record metrics (skip /metrics itself to avoid unbounded cardinality)
+        path = request.url.path
+        if path != "/metrics":
+            REQ_TOTAL.inc(method=request.method, path=path, status=str(response.status_code))
+            REQ_LATENCY.observe(elapsed_s, method=request.method, path=path)
+
         logger.info(
             "request",
             extra={
                 "method": request.method,
-                "path": request.url.path,
+                "path": path,
                 "status": response.status_code,
                 "elapsed_ms": round(elapsed_ms, 2),
             },
@@ -355,6 +391,23 @@ async def index_stats():
         model_name=eng.model_name,
         embedding_dim=eng.embedding_dim,
         faiss_enabled=eng.use_faiss,
+    )
+
+
+@app.get("/metrics", tags=["Health"], response_class=PlainTextResponse)
+async def metrics_endpoint():
+    """
+    Expose Prometheus-style metrics.
+
+    Scrapers (Prometheus, Grafana Agent, Datadog OpenMetrics) should
+    point at this endpoint. The response content-type follows the
+    Prometheus text exposition format.
+    """
+    if engine is not None:
+        DOCS_INDEXED.set(len(engine))
+    return PlainTextResponse(
+        registry.render(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
     )
 
 
@@ -421,6 +474,8 @@ async def search(body: SearchRequest):
     raw_results = eng.search(body.query, top_k=top_k, threshold=body.threshold)
     elapsed = (time.perf_counter() - start) * 1000
 
+    SEARCHES_TOTAL.inc()
+
     results = [
         SearchResult(document=doc, score=round(score, 4), rank=i + 1)
         for i, (doc, score) in enumerate(raw_results)
@@ -461,6 +516,7 @@ async def search_batch(body: BatchSearchRequest):
         start = time.perf_counter()
         raw_results = eng.search(query, top_k=top_k)
         elapsed = (time.perf_counter() - start) * 1000
+        SEARCHES_TOTAL.inc()
 
         results = [
             SearchResult(document=doc, score=round(score, 4), rank=i + 1)

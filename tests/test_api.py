@@ -50,6 +50,24 @@ class TestHealthEndpoints:
         assert "embedding_dim" in data
         assert isinstance(data["total_documents"], int)
 
+    def test_metrics_endpoint_exposes_prometheus_format(self, client):
+        # No fixture dependency on seeded_client: exercise a request to move
+        # the request_total counter and hit /metrics directly.
+        client.get("/health")
+
+        resp = client.get("/metrics")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/plain")
+
+        body = resp.text
+        assert "# TYPE sse_requests_total counter" in body
+        assert "# TYPE sse_request_latency_seconds histogram" in body
+        assert "# TYPE sse_documents_indexed gauge" in body
+        assert "sse_documents_indexed" in body
+        # Latency histogram must have the canonical +Inf bucket
+        assert "sse_request_latency_seconds_bucket" in body
+        assert 'le="+Inf"' in body
+
 
 class TestDocumentManagement:
     """Document CRUD operations."""
