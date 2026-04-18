@@ -19,10 +19,13 @@ Ships with a **REST API** (FastAPI), **Docker** support, and **CI/CD** pipeline 
 - 🌐 **REST API** — Production-grade FastAPI with OpenAPI docs, validation, CORS
 - 🎯 **Fine-Tuning Pipeline** — Domain-adaptive training with contrastive/triplet loss and k-fold CV
 - 📊 **Retrieval Evaluation** — MRR, MAP, NDCG@k, Precision@k, Recall@k with multi-model benchmarking
+- 📂 **BEIR/TREC Loader** — Drop-in loader for corpus/queries/qrels TSV datasets
 - 🐳 **Docker Ready** — Multi-stage build, non-root user, health checks
 - 🔄 **CI/CD** — GitHub Actions: lint → test (matrix) → Docker build & verify
 - 🧪 **Experiment Tracking** — Lightweight MLOps: log runs, compare models, track lineage (no external deps)
-- 📈 **Observability** — Request timing headers, structured logging, health endpoint
+- 📈 **Observability** — JSON logs, X-Request-ID propagation, Prometheus `/metrics`
+- 🛡️ **Production Hardening** — Token-bucket rate limiter + security headers (opt-in)
+- 🧰 **CLI** — Scriptable `search-cli index | search | evaluate | info`
 - 💾 **Persistent Storage** — Save and load indices to disk
 - ⚙️ **12-Factor Config** — Environment-based configuration via pydantic-settings
 
@@ -87,6 +90,7 @@ docker run -p 8000:8000 semantic-search
 |----------|-------------------|------------------------------------|
 | `GET`    | `/health`         | Health check for load balancers    |
 | `GET`    | `/stats`          | Index statistics and model info    |
+| `GET`    | `/metrics`        | Prometheus scrape endpoint         |
 | `POST`   | `/documents`      | Add documents to the index         |
 | `GET`    | `/documents/count`| Document count                     |
 | `DELETE` | `/documents`      | Clear the entire index             |
@@ -165,23 +169,111 @@ engine.search("climate change", top_k=5, mmr_lambda=0.1, mmr_candidate_k=50)
 Returned similarity scores remain on the cosine scale — MMR only changes
 *which* docs are returned, not how they are scored.
 
+## 🧰 Command-Line Interface
+
+A scriptable CLI is included for ad-hoc use and shell pipelines:
+
+```bash
+# Build a persistent index from a file (one doc per line, or JSONL)
+python cli.py index --input docs.txt --output ./my-index
+
+# Run a query
+python cli.py search --index ./my-index --query "machine learning" --top-k 5
+
+# Pipe queries (one per line)
+echo -e "AI\nweb dev" | python cli.py search --index ./my-index --stdin --json | jq .
+
+# Inspect a saved index
+python cli.py info --index ./my-index
+
+# Run a full BEIR/TREC-style evaluation
+python cli.py evaluate --dataset ./datasets/nfcorpus --k 1,3,5,10
+```
+
+Subcommands: `index`, `search`, `evaluate`, `info`, `version`.
+
+## 📂 Evaluation Datasets (BEIR / TREC format)
+
+The built-in loader reads the three conventional TSV files:
+
+```
+<dataset>/
+├── corpus.tsv     # doc_id \t [title \t] text
+├── queries.tsv    # query_id \t text
+└── qrels.tsv      # query_id \t iteration \t doc_id \t relevance
+```
+
+```python
+from eval_data import load_beir_like
+from evaluation import RetrievalEvaluator
+
+ds = load_beir_like("datasets/nfcorpus")
+print(f"{len(ds.corpus)} docs, {len(ds.queries)} queries")
+
+# ds.queries is a list of EvalQuery ready to pass to the evaluator
+evaluator = RetrievalEvaluator()
+evaluator.add_queries(ds.queries)
+report = evaluator.evaluate(search_fn=my_search, k_values=[1, 5, 10])
+```
+
+Works unmodified with most BEIR datasets, CISI, or any dataset that
+follows the TREC qrels convention. Corpus rows with an optional
+`title` column are joined with a space; `qrels` rows with grade `0`
+are dropped by default; references to missing docs are silently
+skipped (matching `trec-eval`).
+
+## 📈 Observability & Hardening
+
+- **Structured logs** — Every line is a single JSON object with
+  `ts`, `level`, `logger`, `msg`, `request_id`, plus any `extra=`
+  fields. Switch to human-readable logs with `SSE_LOG_JSON=false`.
+- **Request correlation** — The API accepts an upstream
+  `X-Request-ID` header (or mints a UUID) and echoes it on every
+  response, including rate-limit rejections. The ID is propagated
+  into every log record emitted during the request via
+  `contextvars`, so async code paths stay correlated.
+- **Prometheus metrics** — `GET /metrics` returns scrape-ready text:
+  `sse_requests_total`, `sse_request_latency_seconds` (histogram),
+  `sse_searches_total`, `sse_documents_indexed`,
+  `sse_rate_limited_total`. No `prometheus_client` dependency.
+- **Rate limiting** — Opt-in token-bucket limiter per client IP.
+  `/health`, `/metrics`, and `/docs` are exempt. Rejections return
+  HTTP 429 with a `Retry-After` header.
+- **Security headers** — On by default: `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
+  strict-origin-when-cross-origin`, `Permissions-Policy:
+  geolocation=(), microphone=(), camera=()`.
+
+Toggle via env vars:
+
+```bash
+SSE_LOG_JSON=true
+SSE_RATE_LIMIT_ENABLED=true
+SSE_RATE_LIMIT_PER_MINUTE=120
+SSE_SECURITY_HEADERS_ENABLED=true
+```
+
 ## ⚙️ Configuration
 
 All settings are loaded from environment variables (prefix `SSE_`) or a `.env` file.
 See [`.env.example`](.env.example) for the full list.
 
-| Variable                  | Default              | Description                      |
-|---------------------------|----------------------|----------------------------------|
-| `SSE_MODEL_NAME`          | `all-MiniLM-L6-v2`  | Sentence-transformer model       |
-| `SSE_USE_FAISS`           | `true`               | Enable FAISS backend             |
-| `SSE_PORT`                | `8000`               | API server port                  |
-| `SSE_WORKERS`             | `1`                  | Uvicorn worker count             |
-| `SSE_LOG_LEVEL`           | `INFO`               | Logging level                    |
-| `SSE_CORS_ORIGINS`        | `["*"]`              | Allowed CORS origins             |
-| `SSE_MAX_TOP_K`           | `50`                 | Maximum results per query        |
-| `SSE_MAX_BATCH_SIZE`      | `100`                | Maximum queries per batch        |
-| `SSE_INDEX_PATH`          | —                    | Load index on startup            |
-| `SSE_AUTO_SAVE_PATH`      | —                    | Auto-save after modifications    |
+| Variable                         | Default              | Description                      |
+|----------------------------------|----------------------|----------------------------------|
+| `SSE_MODEL_NAME`                 | `all-MiniLM-L6-v2`  | Sentence-transformer model       |
+| `SSE_USE_FAISS`                  | `true`               | Enable FAISS backend             |
+| `SSE_PORT`                       | `8000`               | API server port                  |
+| `SSE_WORKERS`                    | `1`                  | Uvicorn worker count             |
+| `SSE_LOG_LEVEL`                  | `INFO`               | Logging level                    |
+| `SSE_LOG_JSON`                   | `true`               | Emit JSON logs (one per line)    |
+| `SSE_CORS_ORIGINS`               | `["*"]`              | Allowed CORS origins             |
+| `SSE_RATE_LIMIT_ENABLED`         | `false`              | Enable in-process rate limiter   |
+| `SSE_RATE_LIMIT_PER_MINUTE`      | `60`                 | Max requests/min per client IP   |
+| `SSE_SECURITY_HEADERS_ENABLED`   | `true`               | Attach common security headers   |
+| `SSE_MAX_TOP_K`                  | `50`                 | Maximum results per query        |
+| `SSE_MAX_BATCH_SIZE`             | `100`                | Maximum queries per batch        |
+| `SSE_INDEX_PATH`                 | —                    | Load index on startup            |
+| `SSE_AUTO_SAVE_PATH`             | —                    | Auto-save after modifications    |
 
 ## 🎯 Fine-Tuning
 
@@ -321,10 +413,15 @@ python experiment_tracker.py export --output results.json
 semantic-search-engine/
 ├── api.py                    # FastAPI REST application
 ├── semantic_search.py        # Core search engine class
+├── cli.py                    # Command-line interface (index/search/evaluate/info)
 ├── mmr.py                    # Maximal Marginal Relevance diversifier
 ├── training.py               # Fine-tuning pipeline (contrastive/triplet/CV)
 ├── evaluation.py             # Retrieval metrics & multi-model benchmarking
+├── eval_data.py              # BEIR/TREC TSV dataset loader
 ├── experiment_tracker.py     # MLOps experiment tracking & model registry
+├── metrics.py                # Zero-dependency Prometheus metrics registry
+├── rate_limit.py             # Token-bucket rate limiter (per client IP)
+├── logging_config.py         # JSON logging + request-ID contextvars
 ├── config.py                 # Pydantic-settings configuration
 ├── demo.py                   # Interactive CLI demo
 ├── requirements.txt          # Python dependencies
