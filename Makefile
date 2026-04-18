@@ -17,6 +17,9 @@ build: ## Build the Docker image
 run: ## Run the interactive demo
 	python demo.py
 
+cli: ## Invoke the CLI (pass ARGS="...")
+	python cli.py $(ARGS)
+
 serve: ## Start the REST API server
 	uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 
