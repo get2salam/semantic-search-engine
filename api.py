@@ -21,6 +21,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from config import get_settings
+from logging_config import (
+    configure_logging,
+    new_request_id,
+    reset_request_id,
+    set_request_id,
+)
 from rate_limit import TokenBucketRateLimiter
 from semantic_search import SemanticSearchEngine
 
@@ -30,12 +36,8 @@ from semantic_search import SemanticSearchEngine
 logger = logging.getLogger("sse.api")
 
 
-def _configure_logging(level: str = "INFO") -> None:
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+def _configure_logging(level: str = "INFO", json_format: bool = True) -> None:
+    configure_logging(level=level, json_format=json_format)
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +152,7 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle handler."""
     global engine
     settings = get_settings()
-    _configure_logging(settings.log_level)
+    _configure_logging(settings.log_level, json_format=settings.log_json)
 
     logger.info("Initializing search engine (model=%s) ...", settings.model_name)
     engine = SemanticSearchEngine(
@@ -245,30 +247,60 @@ _SECURITY_HEADERS = {
 
 @app.middleware("http")
 async def request_timing_middleware(request: Request, call_next):
-    """Attach Server-Timing header with total request duration."""
-    # Rate limit check (before work)
-    limiter = _get_rate_limiter()
-    if limiter is not None and request.url.path not in _RATE_LIMIT_EXEMPT_PATHS:
-        key = _client_key(request)
-        if not limiter.allow(key):
-            retry_after = max(1, int(limiter.retry_after_seconds(key)))
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Rate limit exceeded", "retry_after_seconds": retry_after},
-                headers={"Retry-After": str(retry_after)},
-            )
+    """
+    End-to-end request handling:
+    - assigns / propagates an X-Request-ID for log correlation
+    - enforces rate limiting (opt-in)
+    - emits Server-Timing + security headers
+    """
+    # Preserve an upstream request ID if the caller supplied one, else mint a new one
+    incoming_id = request.headers.get("x-request-id")
+    request_id = incoming_id if incoming_id else new_request_id()
+    token = set_request_id(request_id)
 
-    start = time.perf_counter()
-    response = await call_next(request)
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    response.headers["Server-Timing"] = f"total;dur={elapsed_ms:.1f}"
-    response.headers["X-Request-Time-Ms"] = f"{elapsed_ms:.1f}"
+    try:
+        # Rate limit check (before work)
+        limiter = _get_rate_limiter()
+        if limiter is not None and request.url.path not in _RATE_LIMIT_EXEMPT_PATHS:
+            key = _client_key(request)
+            if not limiter.allow(key):
+                retry_after = max(1, int(limiter.retry_after_seconds(key)))
+                logger.warning(
+                    "rate_limited", extra={"client": key, "path": request.url.path}
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Rate limit exceeded", "retry_after_seconds": retry_after},
+                    headers={
+                        "Retry-After": str(retry_after),
+                        "X-Request-ID": request_id,
+                    },
+                )
 
-    if settings.security_headers_enabled:
-        for header, value in _SECURITY_HEADERS.items():
-            response.headers.setdefault(header, value)
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
-    return response
+        response.headers["Server-Timing"] = f"total;dur={elapsed_ms:.1f}"
+        response.headers["X-Request-Time-Ms"] = f"{elapsed_ms:.1f}"
+        response.headers["X-Request-ID"] = request_id
+
+        if settings.security_headers_enabled:
+            for header, value in _SECURITY_HEADERS.items():
+                response.headers.setdefault(header, value)
+
+        logger.info(
+            "request",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "elapsed_ms": round(elapsed_ms, 2),
+            },
+        )
+        return response
+    finally:
+        reset_request_id(token)
 
 
 # --- Exception handlers ---

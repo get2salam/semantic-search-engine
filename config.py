@@ -16,9 +16,12 @@ class Settings(BaseSettings):
 
     # --- Application ---
     app_name: str = Field(default="Semantic Search Engine", description="Application name")
-    app_version: str = Field(default="1.1.0", description="Application version")
+    app_version: str = Field(default="1.2.0", description="Application version")
     debug: bool = Field(default=False, description="Enable debug mode")
     log_level: str = Field(default="INFO", description="Logging level")
+    log_json: bool = Field(
+        default=True, description="Emit structured JSON logs (one object per line)"
+    )
 
     # --- Model ---
     model_name: str = Field(

@@ -179,6 +179,18 @@ class TestMiddleware:
         assert "referrer-policy" in resp.headers
         assert "permissions-policy" in resp.headers
 
+    def test_request_id_header_minted_when_absent(self, client):
+        resp = client.get("/health")
+        assert resp.headers.get("x-request-id")
+        # Minted IDs are 32 hex chars (uuid4 .hex)
+        req_id = resp.headers["x-request-id"]
+        assert len(req_id) == 32
+        int(req_id, 16)  # must be valid hex
+
+    def test_request_id_header_propagated_when_provided(self, client):
+        resp = client.get("/health", headers={"X-Request-ID": "my-trace-42"})
+        assert resp.headers["x-request-id"] == "my-trace-42"
+
 
 class TestRateLimiting:
     """Token-bucket rate limiter wired into middleware."""
