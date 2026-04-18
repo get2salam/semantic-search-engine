@@ -108,7 +108,17 @@ class _Gauge:
 # Default latency buckets (seconds). Chosen to span the realistic range
 # for embedding search: sub-millisecond through several seconds.
 DEFAULT_BUCKETS: tuple[float, ...] = (
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+    0.001,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
 )
 
 
@@ -153,9 +163,7 @@ class _Histogram:
                 for i, boundary in enumerate(self.buckets):
                     cumulative = self.counts.get(key, [0] * len(self.buckets))[i]
                     bucket_labels = {**label_map, "le": f"{boundary}"}
-                    lines.append(
-                        f"{self.name}_bucket{_format_labels(bucket_labels)} {cumulative}"
-                    )
+                    lines.append(f"{self.name}_bucket{_format_labels(bucket_labels)} {cumulative}")
                 total = self.totals.get(key, 0)
                 inf_labels = {**label_map, "le": "+Inf"}
                 lines.append(f"{self.name}_bucket{_format_labels(inf_labels)} {total}")

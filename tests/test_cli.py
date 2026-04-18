@@ -147,9 +147,7 @@ class TestSearchCommand:
     def test_search_json_output(self, tmp_path: Path, capsys):
         idx = tmp_path / "idx"
         idx.mkdir()
-        rc = cli.main(
-            ["search", "--index", str(idx), "--query", "hello", "--top-k", "2", "--json"]
-        )
+        rc = cli.main(["search", "--index", str(idx), "--query", "hello", "--top-k", "2", "--json"])
         assert rc == 0
         payload = json.loads(capsys.readouterr().out.strip())
         assert payload["query"] == "hello"
@@ -175,9 +173,7 @@ class TestSearchCommand:
         assert "provide --query or --stdin" in capsys.readouterr().err
 
     def test_search_missing_index_dir(self, tmp_path: Path, capsys):
-        rc = cli.main(
-            ["search", "--index", str(tmp_path / "missing"), "--query", "x"]
-        )
+        rc = cli.main(["search", "--index", str(tmp_path / "missing"), "--query", "x"])
         assert rc == 2
         assert "index directory not found" in capsys.readouterr().err
 
@@ -207,12 +203,8 @@ class TestEvaluateCommand:
         (root / "corpus.tsv").write_text(
             "d1\talpha doc\nd2\tbeta doc\nd3\tgamma doc\n", encoding="utf-8"
         )
-        (root / "queries.tsv").write_text(
-            "q1\thello\nq2\tworld\n", encoding="utf-8"
-        )
-        (root / "qrels.tsv").write_text(
-            "q1\t0\td1\t1\nq2\t0\td2\t1\n", encoding="utf-8"
-        )
+        (root / "queries.tsv").write_text("q1\thello\nq2\tworld\n", encoding="utf-8")
+        (root / "qrels.tsv").write_text("q1\t0\td1\t1\nq2\t0\td2\t1\n", encoding="utf-8")
 
     def test_evaluate_text_output(self, tmp_path: Path, capsys):
         ds_dir = tmp_path / "ds"
@@ -230,9 +222,7 @@ class TestEvaluateCommand:
         ds_dir.mkdir()
         self._write_dataset(ds_dir)
 
-        rc = cli.main(
-            ["evaluate", "--dataset", str(ds_dir), "--k", "1,3", "--quiet", "--json"]
-        )
+        rc = cli.main(["evaluate", "--dataset", str(ds_dir), "--k", "1,3", "--quiet", "--json"])
         assert rc == 0
         payload = json.loads(capsys.readouterr().out.strip())
         assert "mrr" in payload

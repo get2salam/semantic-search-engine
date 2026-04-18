@@ -277,9 +277,7 @@ def _get_rate_limiter() -> TokenBucketRateLimiter | None:
 
 
 # Paths that are always exempt from rate limiting (liveness, metrics, docs)
-_RATE_LIMIT_EXEMPT_PATHS = frozenset(
-    {"/health", "/metrics", "/docs", "/redoc", "/openapi.json"}
-)
+_RATE_LIMIT_EXEMPT_PATHS = frozenset({"/health", "/metrics", "/docs", "/redoc", "/openapi.json"})
 
 
 def _client_key(request: Request) -> str:
@@ -320,9 +318,7 @@ async def request_timing_middleware(request: Request, call_next):
             if not limiter.allow(key):
                 retry_after = max(1, int(limiter.retry_after_seconds(key)))
                 RATE_LIMITED_TOTAL.inc()
-                logger.warning(
-                    "rate_limited", extra={"client": key, "path": request.url.path}
-                )
+                logger.warning("rate_limited", extra={"client": key, "path": request.url.path})
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Rate limit exceeded", "retry_after_seconds": retry_after},

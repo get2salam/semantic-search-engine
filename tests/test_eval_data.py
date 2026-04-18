@@ -85,9 +85,7 @@ class TestLoadQrels:
     def test_trec_format(self, tmp_path: Path):
         p = tmp_path / "qrels.tsv"
         p.write_text(
-            "q1\t0\td1\t1\n"
-            "q1\t0\td2\t3\n"
-            "q2\t0\td3\t2\n",
+            "q1\t0\td1\t1\nq1\t0\td2\t3\nq2\t0\td3\t2\n",
             encoding="utf-8",
         )
         qrels = load_qrels_tsv(p)

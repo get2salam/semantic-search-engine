@@ -72,8 +72,8 @@ class TestHistogram:
         reg = MetricsRegistry()
         h = reg.histogram("lat", "latency", buckets=(0.01, 0.1, 1.0))
         h.observe(0.005)  # in 0.01, 0.1, 1.0
-        h.observe(0.05)   # in 0.1, 1.0
-        h.observe(2.0)    # +Inf only
+        h.observe(0.05)  # in 0.1, 1.0
+        h.observe(2.0)  # +Inf only
         out = h.render()
         assert 'lat_bucket{le="0.01"} 1' in out
         assert 'lat_bucket{le="0.1"} 2' in out
