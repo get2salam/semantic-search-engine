@@ -202,6 +202,49 @@ class TestInfoCommand:
         assert payload["faiss_enabled"] is False
 
 
+class TestEvaluateCommand:
+    def _write_dataset(self, root: Path):
+        (root / "corpus.tsv").write_text(
+            "d1\talpha doc\nd2\tbeta doc\nd3\tgamma doc\n", encoding="utf-8"
+        )
+        (root / "queries.tsv").write_text(
+            "q1\thello\nq2\tworld\n", encoding="utf-8"
+        )
+        (root / "qrels.tsv").write_text(
+            "q1\t0\td1\t1\nq2\t0\td2\t1\n", encoding="utf-8"
+        )
+
+    def test_evaluate_text_output(self, tmp_path: Path, capsys):
+        ds_dir = tmp_path / "ds"
+        ds_dir.mkdir()
+        self._write_dataset(ds_dir)
+
+        rc = cli.main(["evaluate", "--dataset", str(ds_dir), "--k", "1,3", "--quiet"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Retrieval Evaluation Report" in out
+        assert "MRR:" in out
+
+    def test_evaluate_json_output(self, tmp_path: Path, capsys):
+        ds_dir = tmp_path / "ds"
+        ds_dir.mkdir()
+        self._write_dataset(ds_dir)
+
+        rc = cli.main(
+            ["evaluate", "--dataset", str(ds_dir), "--k", "1,3", "--quiet", "--json"]
+        )
+        assert rc == 0
+        payload = json.loads(capsys.readouterr().out.strip())
+        assert "mrr" in payload
+        assert "ndcg" in payload
+        assert set(payload["k_values"]) == {1, 3}
+
+    def test_evaluate_missing_dataset(self, tmp_path: Path, capsys):
+        rc = cli.main(["evaluate", "--dataset", str(tmp_path / "nope")])
+        assert rc == 2
+        assert "dataset directory not found" in capsys.readouterr().err
+
+
 class TestVersionCommand:
     def test_version_prints_something(self, capsys):
         rc = cli.main(["version"])

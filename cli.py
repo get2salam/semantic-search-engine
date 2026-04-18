@@ -188,6 +188,49 @@ def cmd_info(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    """Measure retrieval quality against a BEIR-style dataset."""
+    from eval_data import load_beir_like
+    from evaluation import RetrievalEvaluator
+    from semantic_search import SemanticSearchEngine
+
+    dataset_dir = Path(args.dataset)
+    if not dataset_dir.exists():
+        print(f"error: dataset directory not found: {dataset_dir}", file=sys.stderr)
+        return 2
+
+    ds = load_beir_like(dataset_dir)
+    if not ds.queries:
+        print(f"error: no queries with relevance judgments in {dataset_dir}", file=sys.stderr)
+        return 2
+
+    engine = SemanticSearchEngine(model_name=args.model, use_faiss=not args.no_faiss)
+    engine.add_documents(ds.corpus_texts(), show_progress=not args.quiet)
+
+    # Map back retrieved texts to their doc ids
+    text_to_id = {text: doc_id for doc_id, text in ds.corpus.items()}
+
+    def search_fn(query: str, k: int) -> list[str]:
+        results = engine.search(query, top_k=k)
+        return [text_to_id.get(doc, "") for doc, _ in results]
+
+    k_values = [int(k) for k in args.k.split(",")]
+    evaluator = RetrievalEvaluator()
+    evaluator.add_queries(ds.queries)
+    report = evaluator.evaluate(search_fn=search_fn, k_values=k_values, model_name=args.model)
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        report.print_summary()
+
+    if args.output:
+        report.save(args.output)
+        print(f"Report saved to {args.output}")
+
+    return 0
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(_get_version())
     return 0
@@ -242,6 +285,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_info.add_argument("--index", "-i", required=True, help="Path to a saved index directory")
     p_info.add_argument("--json", action="store_true", help="Emit JSON instead of text")
     p_info.set_defaults(func=cmd_info)
+
+    # evaluate
+    p_eval = sub.add_parser(
+        "evaluate",
+        help="Measure retrieval quality against a BEIR-style TSV dataset",
+    )
+    p_eval.add_argument(
+        "--dataset", "-d", required=True, help="Directory containing corpus/queries/qrels TSVs"
+    )
+    p_eval.add_argument(
+        "--model", "-m", default=get_settings().model_name, help="Sentence-transformer model"
+    )
+    p_eval.add_argument("--k", default="1,3,5,10", help="Comma-separated list of k values")
+    p_eval.add_argument("--output", "-o", default=None, help="Write JSON report to this path")
+    p_eval.add_argument("--no-faiss", action="store_true", help="Disable FAISS backend")
+    p_eval.add_argument("--quiet", "-q", action="store_true", help="Suppress progress bars")
+    p_eval.add_argument("--json", action="store_true", help="Emit JSON instead of text")
+    p_eval.set_defaults(func=cmd_evaluate)
 
     # version
     p_version = sub.add_parser("version", help="Print the engine version")
