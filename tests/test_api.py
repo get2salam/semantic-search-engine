@@ -143,6 +143,42 @@ class TestSearchEndpoints:
         assert len(data["results"]) == 3
         assert data["elapsed_ms"] >= 0
 
+    def test_search_with_mmr_lambda(self, seeded_client):
+        # At lambda=1.0 results should match the non-MMR ordering for top-k.
+        plain = seeded_client.post(
+            "/search", json={"query": "artificial intelligence", "top_k": 3}
+        ).json()
+        mmr = seeded_client.post(
+            "/search",
+            json={"query": "artificial intelligence", "top_k": 3, "mmr_lambda": 1.0},
+        ).json()
+        assert mmr["results"][0]["document"] == plain["results"][0]["document"]
+        # All returned ranks must be 1..N in order
+        assert [r["rank"] for r in mmr["results"]] == [1, 2, 3]
+
+    def test_search_mmr_diversity_changes_ordering(self, seeded_client):
+        # At lambda=0.0 MMR maximises diversity — ordering can differ from
+        # pure relevance but must return the requested number of results.
+        resp = seeded_client.post(
+            "/search",
+            json={
+                "query": "programming",
+                "top_k": 3,
+                "mmr_lambda": 0.0,
+                "mmr_candidate_k": 25,
+            },
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["results"]) == 3
+
+    def test_search_get_supports_mmr_lambda(self, seeded_client):
+        resp = seeded_client.get(
+            "/search",
+            params={"q": "neural networks", "top_k": 3, "mmr_lambda": 0.5},
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["results"]) <= 3
+
     def test_search_empty_index_returns_400(self, client):
         # Clear first
         client.delete("/documents")
@@ -163,6 +199,10 @@ class TestRequestValidation:
 
     def test_threshold_out_of_range_returns_422(self, client):
         resp = client.post("/search", json={"query": "test", "threshold": 2.0})
+        assert resp.status_code == 422
+
+    def test_mmr_lambda_out_of_range_returns_422(self, client):
+        resp = client.post("/search", json={"query": "test", "mmr_lambda": 1.5})
         assert resp.status_code == 422
 
     def test_batch_too_large_returns_400(self, seeded_client):

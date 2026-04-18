@@ -169,6 +169,18 @@ engine.search("climate change", top_k=5, mmr_lambda=0.1, mmr_candidate_k=50)
 Returned similarity scores remain on the cosine scale — MMR only changes
 *which* docs are returned, not how they are scored.
 
+MMR is also exposed through the REST API:
+
+```bash
+# POST
+curl -X POST http://localhost:8000/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "climate change", "top_k": 5, "mmr_lambda": 0.5}'
+
+# GET
+curl "http://localhost:8000/search?q=climate+change&top_k=5&mmr_lambda=0.5"
+```
+
 ## 🧰 Command-Line Interface
 
 A scriptable CLI is included for ad-hoc use and shell pipelines:

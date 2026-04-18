@@ -104,10 +104,36 @@ class SearchRequest(BaseModel):
     threshold: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Minimum similarity score"
     )
+    mmr_lambda: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "If set, apply Maximal Marginal Relevance diversification. "
+            "1.0 = pure relevance (same as omitting it), 0.0 = maximum "
+            "diversity, 0.5 = balanced."
+        ),
+    )
+    mmr_candidate_k: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Size of the candidate pool to pull before MMR re-ranking. "
+            "Defaults to max(4*top_k, 25). Ignored when mmr_lambda is unset."
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"query": "artificial intelligence", "top_k": 3, "threshold": 0.3}]
+            "examples": [
+                {"query": "artificial intelligence", "top_k": 3, "threshold": 0.3},
+                {
+                    "query": "climate change",
+                    "top_k": 5,
+                    "mmr_lambda": 0.5,
+                    "mmr_candidate_k": 50,
+                },
+            ]
         }
     }
 
@@ -471,7 +497,13 @@ async def search(body: SearchRequest):
     top_k = min(body.top_k, settings.max_top_k)
 
     start = time.perf_counter()
-    raw_results = eng.search(body.query, top_k=top_k, threshold=body.threshold)
+    raw_results = eng.search(
+        body.query,
+        top_k=top_k,
+        threshold=body.threshold,
+        mmr_lambda=body.mmr_lambda,
+        mmr_candidate_k=body.mmr_candidate_k,
+    )
     elapsed = (time.perf_counter() - start) * 1000
 
     SEARCHES_TOTAL.inc()
@@ -543,13 +575,28 @@ async def search_get(
     q: str = Query(..., min_length=1, max_length=10_000, description="Search query"),
     top_k: int = Query(default=5, ge=1, le=50, description="Number of results"),
     threshold: float | None = Query(default=None, ge=0.0, le=1.0),
+    mmr_lambda: float | None = Query(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Enable MMR (1=relevance, 0=diversity, 0.5=balanced)",
+    ),
+    mmr_candidate_k: int | None = Query(default=None, ge=1),
 ):
     """
     GET-based search endpoint for simple integrations and browser testing.
 
-    Example: ``/search?q=machine+learning&top_k=3``
+    Example: ``/search?q=machine+learning&top_k=3&mmr_lambda=0.5``
     """
-    return await search(SearchRequest(query=q, top_k=top_k, threshold=threshold))
+    return await search(
+        SearchRequest(
+            query=q,
+            top_k=top_k,
+            threshold=threshold,
+            mmr_lambda=mmr_lambda,
+            mmr_candidate_k=mmr_candidate_k,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
