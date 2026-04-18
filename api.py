@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from config import get_settings
+from rate_limit import TokenBucketRateLimiter
 from semantic_search import SemanticSearchEngine
 
 # ---------------------------------------------------------------------------
@@ -206,14 +207,67 @@ app.add_middleware(
 )
 
 
+# Rate limiter (lazy-init so tests can toggle settings)
+_rate_limiter: TokenBucketRateLimiter | None = None
+
+
+def _get_rate_limiter() -> TokenBucketRateLimiter | None:
+    global _rate_limiter
+    if not settings.rate_limit_enabled:
+        return None
+    if _rate_limiter is None:
+        _rate_limiter = TokenBucketRateLimiter.per_minute(settings.rate_limit_per_minute)
+    return _rate_limiter
+
+
+# Paths that are always exempt from rate limiting (liveness, metrics, docs)
+_RATE_LIMIT_EXEMPT_PATHS = frozenset(
+    {"/health", "/metrics", "/docs", "/redoc", "/openapi.json"}
+)
+
+
+def _client_key(request: Request) -> str:
+    """Resolve a stable client identity for rate limiting."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# Common security headers applied to every response when enabled
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+}
+
+
 @app.middleware("http")
 async def request_timing_middleware(request: Request, call_next):
     """Attach Server-Timing header with total request duration."""
+    # Rate limit check (before work)
+    limiter = _get_rate_limiter()
+    if limiter is not None and request.url.path not in _RATE_LIMIT_EXEMPT_PATHS:
+        key = _client_key(request)
+        if not limiter.allow(key):
+            retry_after = max(1, int(limiter.retry_after_seconds(key)))
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded", "retry_after_seconds": retry_after},
+                headers={"Retry-After": str(retry_after)},
+            )
+
     start = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - start) * 1000
     response.headers["Server-Timing"] = f"total;dur={elapsed_ms:.1f}"
     response.headers["X-Request-Time-Ms"] = f"{elapsed_ms:.1f}"
+
+    if settings.security_headers_enabled:
+        for header, value in _SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
+
     return response
 
 

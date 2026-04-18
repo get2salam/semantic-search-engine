@@ -38,8 +38,19 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, ge=1, le=65535, description="Server bind port")
     workers: int = Field(default=1, ge=1, le=16, description="Number of worker processes")
     cors_origins: list[str] = Field(default=["*"], description="Allowed CORS origins")
+
+    # --- Rate limiting ---
+    rate_limit_enabled: bool = Field(
+        default=False, description="Enable in-process token-bucket rate limiting"
+    )
     rate_limit_per_minute: int = Field(
-        default=60, ge=1, description="Max requests per minute per client"
+        default=60, ge=1, description="Max requests per minute per client IP"
+    )
+
+    # --- Security headers ---
+    security_headers_enabled: bool = Field(
+        default=True,
+        description="Attach common security headers (X-Content-Type-Options, etc.)",
     )
 
     # --- Persistence ---

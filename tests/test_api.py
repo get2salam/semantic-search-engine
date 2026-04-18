@@ -170,3 +170,40 @@ class TestMiddleware:
             },
         )
         assert "access-control-allow-origin" in resp.headers
+
+    def test_security_headers_present(self, client):
+        resp = client.get("/health")
+        # Security headers are enabled by default via settings
+        assert resp.headers.get("x-content-type-options") == "nosniff"
+        assert resp.headers.get("x-frame-options") == "DENY"
+        assert "referrer-policy" in resp.headers
+        assert "permissions-policy" in resp.headers
+
+
+class TestRateLimiting:
+    """Token-bucket rate limiter wired into middleware."""
+
+    def test_rate_limit_rejects_after_burst(self, monkeypatch):
+        # Enable rate limiting with a tiny capacity via a fresh app import cycle
+        import importlib
+
+        import api as api_module
+
+        monkeypatch.setattr(api_module.settings, "rate_limit_enabled", True, raising=False)
+        # Reset any pre-existing limiter instance
+        api_module._rate_limiter = None
+        monkeypatch.setattr(api_module.settings, "rate_limit_per_minute", 2, raising=False)
+
+        with TestClient(api_module.app) as c:
+            r1 = c.get("/stats")
+            r2 = c.get("/stats")
+            r3 = c.get("/stats")
+            assert r1.status_code == 200
+            assert r2.status_code == 200
+            assert r3.status_code == 429
+            assert r3.json()["detail"] == "Rate limit exceeded"
+            assert "retry-after" in {k.lower() for k in r3.headers}
+
+        # Cleanup so subsequent tests are not rate-limited
+        api_module._rate_limiter = None
+        importlib.invalidate_caches()
