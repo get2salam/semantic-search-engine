@@ -407,6 +407,43 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_number_vector(path: Path) -> list[float]:
+    """Load a numeric vector from JSON list or ``{"values": [...]}``."""
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+    if isinstance(payload, dict) and "values" in payload:
+        payload = payload["values"]
+    if not isinstance(payload, list):
+        raise ValueError("expected a JSON list or {'values': [...]} object")
+    try:
+        return [float(v) for v in payload]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("all values must be numeric") from exc
+
+
+def cmd_drift_report(args: argparse.Namespace) -> int:
+    """Compare baseline/current numeric distributions for drift."""
+    from drift import population_stability_index
+
+    try:
+        baseline = _load_number_vector(Path(args.baseline))
+        current = _load_number_vector(Path(args.current))
+        report = population_stability_index(baseline, current, n_bins=args.bins)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"error: failed to build drift report: {exc}", file=sys.stderr)
+        return 2
+
+    if args.output:
+        Path(args.output).write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print("\n".join(report.summary_lines()))
+
+    return 0
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(_get_version())
     return 0
@@ -556,6 +593,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_cal.add_argument("--output", "-o", default=None, help="Write JSON report to this path")
     p_cal.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
     p_cal.set_defaults(func=cmd_calibrate)
+
+    # drift-report
+    p_drift = sub.add_parser(
+        "drift-report",
+        help="Compare baseline/current score or feature distributions with PSI",
+    )
+    p_drift.add_argument("--baseline", required=True, help="Baseline numeric vector JSON")
+    p_drift.add_argument("--current", required=True, help="Current numeric vector JSON")
+    p_drift.add_argument("--bins", type=int, default=10, help="Number of PSI bins")
+    p_drift.add_argument("--output", "-o", default=None, help="Write JSON report to this path")
+    p_drift.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
+    p_drift.set_defaults(func=cmd_drift_report)
 
     # version
     p_version = sub.add_parser("version", help="Print the engine version")
