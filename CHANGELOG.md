@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Retrieval Quality Gate** (`quality_gate.py`). A model-agnostic CI
+  guardrail that compares a current `EvalReport` against a committed
+  baseline JSON and flags regressions on MRR, MAP, NDCG@k, P@k and
+  R@k using combined absolute / relative / floor thresholds. Surfaces
+  per-query regressions and emits a PR-comment-friendly Markdown
+  summary plus a structured JSON result.
+- `search-cli quality-gate` subcommand with `--strict` preset,
+  `--config`, `--update-baseline` bootstrap, and dual `--markdown` /
+  `--output` writers. Honours the canonical CI exit-code contract:
+  `0` pass, `1` regression, `2` usage / I/O error.
+- `examples/quality_gate/` ships a small public-safe TSV dataset, a
+  precomputed baseline (`all-MiniLM-L6-v2`), a sample threshold
+  config, and a `regenerate_baseline.py` helper.
+- 35 new unit tests covering threshold semantics, configuration,
+  per-query detection, JSON round-trips, rendering and the CLI
+  subcommand end-to-end.
+
 ## [1.2.0] - 2026-04-18
 
 ### Added

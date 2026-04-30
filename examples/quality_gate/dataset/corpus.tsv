@@ -1,0 +1,20 @@
+d1	Machine learning is a subfield of artificial intelligence focused on building systems that learn from data.
+d2	Deep learning uses neural networks with many layers to learn hierarchical representations of input data.
+d3	Natural language processing combines linguistics and machine learning to help computers understand text.
+d4	Transformers are a neural network architecture that uses self-attention to model long-range dependencies in sequences.
+d5	BERT is a pre-trained transformer model commonly fine-tuned for downstream NLP tasks.
+d6	Reinforcement learning trains agents to make decisions by maximising cumulative rewards from an environment.
+d7	Computer vision enables machines to analyse and interpret images and videos.
+d8	Convolutional neural networks are widely used for image classification and object detection tasks.
+d9	Python is a high-level programming language popular for data science and scientific computing.
+d10	JavaScript runs in web browsers and powers most interactive front-end web applications.
+d11	Docker packages applications and their dependencies into portable containers that run consistently across environments.
+d12	Kubernetes orchestrates containerised workloads, automating deployment, scaling and rollouts.
+d13	REST APIs expose backend services over HTTP using stateless request-response interactions.
+d14	GraphQL gives clients a flexible query language to request exactly the data they need from an API.
+d15	PostgreSQL is an open-source relational database management system known for standards compliance and extensibility.
+d16	Redis is an in-memory data store often used for caching and pub/sub messaging.
+d17	Continuous integration runs automated tests on every commit to catch regressions early.
+d18	Continuous delivery extends CI by automating deployments so changes can ship to production safely and quickly.
+d19	Sentence embeddings map sentences to fixed-length vectors so that semantically similar sentences land near each other.
+d20	Vector databases index high-dimensional embeddings to support fast approximate nearest-neighbour search.

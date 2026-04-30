@@ -1,0 +1,15 @@
+{
+  "default_threshold": {
+    "abs_drop": 0.02,
+    "rel_drop": 0.05,
+    "min_value": 0.0
+  },
+  "thresholds": {
+    "mrr": {"abs_drop": 0.015, "rel_drop": 0.03, "min_value": 0.0},
+    "ndcg@5": {"abs_drop": 0.015, "rel_drop": 0.03, "min_value": 0.0},
+    "ndcg@10": {"abs_drop": 0.02, "rel_drop": 0.05, "min_value": 0.0},
+    "recall@10": {"abs_drop": 0.02, "rel_drop": 0.05, "min_value": 0.0}
+  },
+  "per_query_drop": 0.10,
+  "per_query_max_listed": 5
+}

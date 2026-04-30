@@ -19,6 +19,7 @@ Ships with a **REST API** (FastAPI), **Docker** support, and **CI/CD** pipeline 
 - 🌐 **REST API** — Production-grade FastAPI with OpenAPI docs, validation, CORS
 - 🎯 **Fine-Tuning Pipeline** — Domain-adaptive training with contrastive/triplet loss and k-fold CV
 - 📊 **Retrieval Evaluation** — MRR, MAP, NDCG@k, Precision@k, Recall@k with multi-model benchmarking
+- 🛡️ **Quality Gate** — CI regression guardrail that compares evals against a committed baseline (PR-comment Markdown output)
 - 📂 **BEIR/TREC Loader** — Drop-in loader for corpus/queries/qrels TSV datasets
 - 🐳 **Docker Ready** — Multi-stage build, non-root user, health checks
 - 🔄 **CI/CD** — GitHub Actions: lint → test (matrix) → Docker build & verify
@@ -202,7 +203,7 @@ python cli.py info --index ./my-index
 python cli.py evaluate --dataset ./datasets/nfcorpus --k 1,3,5,10
 ```
 
-Subcommands: `index`, `search`, `evaluate`, `info`, `version`.
+Subcommands: `index`, `search`, `evaluate`, `quality-gate`, `info`, `version`.
 
 ## 📂 Evaluation Datasets (BEIR / TREC format)
 
@@ -233,6 +234,74 @@ follows the TREC qrels convention. Corpus rows with an optional
 `title` column are joined with a space; `qrels` rows with grade `0`
 are dropped by default; references to missing docs are silently
 skipped (matching `trec-eval`).
+
+## 🛡️ Retrieval Quality Gate
+
+A CI guardrail that compares a current evaluation report against a
+**committed baseline** and fails the build when retrieval quality
+regresses beyond configurable thresholds. Because the gate operates
+on serialized `EvalReport` JSON it stays cheap, deterministic and
+fully decoupled from the embedding model — the same logic guards
+dense, sparse, hybrid and reranked pipelines without modification.
+
+How regressions are detected (per metric):
+
+- **Absolute drop** — flagged when `current < baseline − abs_drop`
+  (catches small but material drops on already-high metrics).
+- **Relative drop** — flagged when `current < baseline · (1 − rel_drop)`
+  (catches proportionally large regressions on low-magnitude metrics).
+- **Hard floor** — optional `min_value` so a metric never silently
+  drifts below an SLA.
+- **Per-query diagnostics** — the gate also surfaces *which* queries
+  regressed (by reciprocal-rank, AP and NDCG@k) so the PR comment
+  pinpoints what to investigate.
+
+Workflow:
+
+```bash
+# 1. Run evaluation and write a current report
+python cli.py evaluate \
+  --dataset examples/quality_gate/dataset \
+  --k 1,3,5,10 \
+  --output report.json --quiet
+
+# 2. Compare it against the committed baseline
+python cli.py quality-gate \
+  --baseline examples/quality_gate/baseline.json \
+  --report   report.json \
+  --config   examples/quality_gate/config.json \
+  --markdown gate.md
+
+# Exit codes: 0 = pass, 1 = regression, 2 = usage / I/O error
+```
+
+Output (excerpt of the Markdown summary the gate writes for PR comments):
+
+```markdown
+## Retrieval quality gate — **PASS**
+_model `all-MiniLM-L6-v2` · queries 8 → 8 · 2026-04-30T12:00:00Z_
+
+| Metric    | Baseline | Current |       Δ |    Δ% | Status |
+| ---       |     ---: |    ---: |    ---: |  ---: |  :---: |
+| `mrr`     |   0.9583 |  0.9583 | +0.0000 | +0.0% |     OK |
+| `ndcg@5`  |   0.9667 |  0.9667 | +0.0000 | +0.0% |     OK |
+| `recall@10` | 1.0000 |  1.0000 | +0.0000 | +0.0% |     OK |
+```
+
+Bootstrap a baseline the first time you wire the gate up:
+
+```bash
+python cli.py quality-gate \
+  --baseline examples/quality_gate/baseline.json \
+  --report   report.json \
+  --update-baseline
+```
+
+Re-run [`examples/quality_gate/regenerate_baseline.py`](examples/quality_gate/regenerate_baseline.py)
+when you intentionally change the model, the dataset, or the
+retrieval configuration. Tweak per-metric thresholds in
+[`examples/quality_gate/config.json`](examples/quality_gate/config.json)
+or use the built-in `--strict` preset.
 
 ## 📈 Observability & Hardening
 
