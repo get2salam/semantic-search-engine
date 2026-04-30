@@ -9,8 +9,9 @@ JSON fixtures and review ranking movement in pull requests.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Sequence
+from typing import Any
 
 __all__ = ["QueryRegression", "RegressionReport", "compare_ranked_snapshots"]
 

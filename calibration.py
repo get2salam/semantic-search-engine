@@ -12,8 +12,9 @@ well-calibrated scores make threshold tuning safer and easier to explain.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 

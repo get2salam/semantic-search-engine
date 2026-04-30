@@ -23,8 +23,9 @@ License: MIT
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 from eval_stats import (
     BootstrapCI,
@@ -102,16 +103,8 @@ class ABReport:
             rel_pct = comp.relative_delta * 100.0
             winner = self.winner(comp.metric, alpha=alpha)
             lines.append(
-                "| {metric} | {a:.4f} | {b:.4f} | {delta:+.4f} | "
-                "{rel:+.2f}% | {p:.4f} | {winner} |".format(
-                    metric=comp.metric,
-                    a=comp.a_ci.mean,
-                    b=comp.b_ci.mean,
-                    delta=comp.delta,
-                    rel=rel_pct,
-                    p=comp.paired_test.p_value,
-                    winner=winner,
-                )
+                f"| {comp.metric} | {comp.a_ci.mean:.4f} | {comp.b_ci.mean:.4f} | {comp.delta:+.4f} | "
+                f"{rel_pct:+.2f}% | {comp.paired_test.p_value:.4f} | {winner} |"
             )
         return "\n".join(lines)
 

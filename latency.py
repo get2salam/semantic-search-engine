@@ -26,10 +26,11 @@ License: MIT
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from statistics import mean, median
-from typing import Any, Iterator
+from typing import Any
 
 __all__ = ["LatencyProfile", "LatencyProfiler"]
 

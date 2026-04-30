@@ -25,8 +25,9 @@ License: MIT
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -170,10 +171,7 @@ def explain_query(
     else:
         doc_emb = np.asarray(document_embedding, dtype=np.float32).reshape(-1)
 
-    if base_score is None:
-        base = _cosine(query_emb, doc_emb)
-    else:
-        base = float(base_score)
+    base = _cosine(query_emb, doc_emb) if base_score is None else float(base_score)
 
     attributions: list[TokenAttribution] = []
     for i, token in enumerate(tokens):

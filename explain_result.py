@@ -18,12 +18,18 @@ License: MIT
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import numpy as np
 
-from contributions import SpanContribution, TokenContribution, contributing_spans, contributing_tokens
+from contributions import (
+    SpanContribution,
+    TokenContribution,
+    contributing_spans,
+    contributing_tokens,
+)
 from explain import QueryExplanation, _encode, explain_query, tokenize
 
 __all__ = [

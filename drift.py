@@ -10,8 +10,9 @@ model review notes.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 
