@@ -499,6 +499,69 @@ class TestCalibrateCommand:
         assert "failed to build calibration report" in capsys.readouterr().err
 
 
+class TestDriftReportCommand:
+    def test_drift_report_text_output(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"
+        current = tmp_path / "current.json"
+        baseline.write_text(json.dumps([0.1, 0.2, 0.3]), encoding="utf-8")
+        current.write_text(json.dumps([0.7, 0.8, 0.9]), encoding="utf-8")
+
+        rc = cli.main(
+            [
+                "drift-report",
+                "--baseline",
+                str(baseline),
+                "--current",
+                str(current),
+                "--bins",
+                "2",
+            ]
+        )
+
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Drift report: PSI=" in out
+        assert "baseline examples" in out
+
+    def test_drift_report_json_output_and_file(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"
+        current = tmp_path / "current.json"
+        out_path = tmp_path / "drift.json"
+        baseline.write_text(json.dumps({"values": [0.1, 0.2]}), encoding="utf-8")
+        current.write_text(json.dumps({"values": [0.1, 0.8]}), encoding="utf-8")
+
+        rc = cli.main(
+            [
+                "drift-report",
+                "--baseline",
+                str(baseline),
+                "--current",
+                str(current),
+                "--bins",
+                "2",
+                "--json",
+                "--output",
+                str(out_path),
+            ]
+        )
+
+        assert rc == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["n_baseline"] == 2
+        assert json.loads(out_path.read_text(encoding="utf-8"))["n_current"] == 2
+
+    def test_drift_report_reports_bad_input(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"
+        current = tmp_path / "current.json"
+        baseline.write_text(json.dumps({"bad": []}), encoding="utf-8")
+        current.write_text(json.dumps([0.1]), encoding="utf-8")
+
+        rc = cli.main(["drift-report", "--baseline", str(baseline), "--current", str(current)])
+
+        assert rc == 2
+        assert "failed to build drift report" in capsys.readouterr().err
+
+
 class TestVersionCommand:
     def test_version_prints_something(self, capsys):
         rc = cli.main(["version"])
