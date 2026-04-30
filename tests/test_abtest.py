@@ -40,6 +40,26 @@ def test_report_to_dict_is_json_ready():
     assert "paired_test" in payload["metrics"][0]
 
 
+def test_report_renders_markdown_and_summary_lines():
+    report = compare_systems(
+        {"mrr": [0.2, 0.4]},
+        {"mrr": [0.3, 0.5]},
+        name_a="baseline",
+        name_b="candidate",
+        n_resamples=20,
+        seed=2,
+    )
+
+    markdown = report.to_markdown()
+    assert "# A/B Comparison: baseline vs candidate" in markdown
+    assert "| mrr |" in markdown
+    assert "Queries: **2**" in markdown
+
+    lines = report.summary_lines()
+    assert lines[0] == "A/B Comparison: baseline vs candidate (2 queries)"
+    assert lines[1].startswith("- mrr: Δ=")
+
+
 def test_winner_returns_significant_direction_or_tie():
     report = compare_systems(
         {"mrr": [0.1, 0.1, 0.1, 0.1]},

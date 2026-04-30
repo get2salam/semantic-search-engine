@@ -88,6 +88,44 @@ class ABReport:
             "metrics": [m.to_dict() for m in self.metrics],
         }
 
+    def to_markdown(self, *, alpha: float = 0.05) -> str:
+        """Render a compact Markdown table suitable for PR comments."""
+        lines = [
+            f"# A/B Comparison: {self.name_a} vs {self.name_b}",
+            "",
+            f"Queries: **{self.n_queries}**",
+            "",
+            "| Metric | A mean | B mean | Δ (B-A) | Rel Δ | p-value | Winner |",
+            "|---|---:|---:|---:|---:|---:|---|",
+        ]
+        for comp in self.metrics:
+            rel_pct = comp.relative_delta * 100.0
+            winner = self.winner(comp.metric, alpha=alpha)
+            lines.append(
+                "| {metric} | {a:.4f} | {b:.4f} | {delta:+.4f} | "
+                "{rel:+.2f}% | {p:.4f} | {winner} |".format(
+                    metric=comp.metric,
+                    a=comp.a_ci.mean,
+                    b=comp.b_ci.mean,
+                    delta=comp.delta,
+                    rel=rel_pct,
+                    p=comp.paired_test.p_value,
+                    winner=winner,
+                )
+            )
+        return "\n".join(lines)
+
+    def summary_lines(self, *, alpha: float = 0.05) -> list[str]:
+        """Human-readable one-line summaries for terminal output."""
+        lines = [f"A/B Comparison: {self.name_a} vs {self.name_b} ({self.n_queries} queries)"]
+        for comp in self.metrics:
+            lines.append(
+                f"- {comp.metric}: Δ={comp.delta:+.4f} "
+                f"({comp.relative_delta * 100.0:+.2f}%), "
+                f"p={comp.paired_test.p_value:.4f}, winner={self.winner(comp.metric, alpha=alpha)}"
+            )
+        return lines
+
     def winner(self, metric: str, alpha: float = 0.05) -> str:
         """Name the winner on ``metric`` if the paired bootstrap p-value is
         below ``alpha``, else ``"tie"``.
