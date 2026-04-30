@@ -231,6 +231,80 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_quality_gate(args: argparse.Namespace) -> int:
+    """Compare a current evaluation report against a committed baseline.
+
+    Exit codes:
+        0  baseline updated, or comparison passed.
+        1  comparison detected a regression beyond configured thresholds.
+        2  usage / I/O error (missing files, malformed JSON, ...).
+    """
+    from quality_gate import GateConfig, QualityGate, load_report, write_baseline
+
+    baseline_path = Path(args.baseline)
+    report_path = Path(args.report)
+
+    if not report_path.exists():
+        print(f"error: report file not found: {report_path}", file=sys.stderr)
+        return 2
+
+    try:
+        current = load_report(report_path)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"error: failed to read report {report_path}: {exc}", file=sys.stderr)
+        return 2
+
+    # Bootstrap path: if a baseline does not exist yet, --update-baseline
+    # creates it from the current report. Without that flag we can't
+    # compare, so fail loudly rather than silently passing.
+    if args.update_baseline:
+        write_baseline(current, baseline_path)
+        print(f"Baseline updated → {baseline_path}")
+        return 0
+
+    if not baseline_path.exists():
+        print(
+            f"error: baseline not found: {baseline_path}\n"
+            "  hint: bootstrap one with --update-baseline",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        baseline = load_report(baseline_path)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(
+            f"error: failed to read baseline {baseline_path}: {exc}",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.config:
+        config_path = Path(args.config)
+        if not config_path.exists():
+            print(f"error: config file not found: {config_path}", file=sys.stderr)
+            return 2
+        config = GateConfig.load(config_path)
+    elif args.strict:
+        config = GateConfig.strict()
+    else:
+        config = GateConfig.default()
+
+    result = QualityGate(config).compare(baseline, current)
+
+    if args.markdown:
+        result.save_markdown(args.markdown)
+    if args.output:
+        result.save_json(args.output)
+
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print(result.render_text())
+
+    return 0 if result.passed else 1
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(_get_version())
     return 0
@@ -303,6 +377,53 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--quiet", "-q", action="store_true", help="Suppress progress bars")
     p_eval.add_argument("--json", action="store_true", help="Emit JSON instead of text")
     p_eval.set_defaults(func=cmd_evaluate)
+
+    # quality-gate
+    p_gate = sub.add_parser(
+        "quality-gate",
+        help="Compare a retrieval report against a committed baseline",
+    )
+    p_gate.add_argument(
+        "--baseline",
+        "-b",
+        required=True,
+        help="Path to the committed baseline JSON (produced by `evaluate`)",
+    )
+    p_gate.add_argument(
+        "--report",
+        "-r",
+        required=True,
+        help="Path to the current evaluation report JSON",
+    )
+    p_gate.add_argument(
+        "--config",
+        "-c",
+        default=None,
+        help="Optional GateConfig JSON (per-metric thresholds)",
+    )
+    p_gate.add_argument(
+        "--strict",
+        action="store_true",
+        help="Use the built-in strict threshold preset (overridden by --config)",
+    )
+    p_gate.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="Replace the baseline with the current report and exit 0",
+    )
+    p_gate.add_argument(
+        "--markdown",
+        default=None,
+        help="Write a Markdown summary (suitable for PR comments) to this path",
+    )
+    p_gate.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help="Write the JSON gate result to this path",
+    )
+    p_gate.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
+    p_gate.set_defaults(func=cmd_quality_gate)
 
     # version
     p_version = sub.add_parser("version", help="Print the engine version")

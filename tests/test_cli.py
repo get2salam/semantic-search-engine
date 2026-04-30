@@ -235,6 +235,148 @@ class TestEvaluateCommand:
         assert "dataset directory not found" in capsys.readouterr().err
 
 
+class TestQualityGateCommand:
+    """Behaviour tests for the `quality-gate` subcommand."""
+
+    def _write_report(self, path: Path, *, mrr: float = 0.85, ndcg5: float = 0.82) -> None:
+        path.write_text(
+            json.dumps(
+                {
+                    "num_queries": 5,
+                    "k_values": [1, 5, 10],
+                    "mrr": mrr,
+                    "map": 0.80,
+                    "ndcg": {"1": 0.75, "5": ndcg5, "10": 0.84},
+                    "precision": {"1": 0.80, "5": 0.60, "10": 0.50},
+                    "recall": {"1": 0.30, "5": 0.60, "10": 0.70},
+                    "elapsed_seconds": 0.5,
+                    "model_name": "stub-model",
+                    "per_query": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def test_passes_when_metrics_unchanged(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"
+        report = tmp_path / "report.json"
+        self._write_report(baseline)
+        self._write_report(report)
+
+        rc = cli.main(["quality-gate", "--baseline", str(baseline), "--report", str(report)])
+        assert rc == 0
+        assert "PASS" in capsys.readouterr().out
+
+    def test_fails_when_metric_drops(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"
+        report = tmp_path / "report.json"
+        self._write_report(baseline, mrr=0.90)
+        self._write_report(report, mrr=0.70)
+
+        rc = cli.main(["quality-gate", "--baseline", str(baseline), "--report", str(report)])
+        assert rc == 1
+        assert "FAIL" in capsys.readouterr().out
+
+    def test_update_baseline_creates_file(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"  # does not exist yet
+        report = tmp_path / "report.json"
+        self._write_report(report, mrr=0.91)
+
+        rc = cli.main(
+            [
+                "quality-gate",
+                "--baseline",
+                str(baseline),
+                "--report",
+                str(report),
+                "--update-baseline",
+            ]
+        )
+        assert rc == 0
+        assert baseline.exists()
+        payload = json.loads(baseline.read_text(encoding="utf-8"))
+        assert payload["mrr"] == 0.91
+        assert "Baseline updated" in capsys.readouterr().out
+
+    def test_missing_baseline_without_bootstrap_flag(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"  # does not exist
+        report = tmp_path / "report.json"
+        self._write_report(report)
+
+        rc = cli.main(["quality-gate", "--baseline", str(baseline), "--report", str(report)])
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "baseline not found" in err
+        assert "--update-baseline" in err
+
+    def test_missing_report(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"
+        self._write_report(baseline)
+
+        rc = cli.main(
+            [
+                "quality-gate",
+                "--baseline",
+                str(baseline),
+                "--report",
+                str(tmp_path / "nope.json"),
+            ]
+        )
+        assert rc == 2
+        assert "report file not found" in capsys.readouterr().err
+
+    def test_writes_markdown_and_json_outputs(self, tmp_path: Path):
+        baseline = tmp_path / "baseline.json"
+        report = tmp_path / "report.json"
+        md_path = tmp_path / "gate.md"
+        json_path = tmp_path / "gate.json"
+        self._write_report(baseline, mrr=0.85)
+        self._write_report(report, mrr=0.70)
+
+        rc = cli.main(
+            [
+                "quality-gate",
+                "--baseline",
+                str(baseline),
+                "--report",
+                str(report),
+                "--markdown",
+                str(md_path),
+                "--output",
+                str(json_path),
+            ]
+        )
+        assert rc == 1
+        md = md_path.read_text(encoding="utf-8")
+        assert "FAIL" in md
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        assert payload["passed"] is False
+
+    def test_strict_preset_tightens_thresholds(self, tmp_path: Path, capsys):
+        baseline = tmp_path / "baseline.json"
+        report = tmp_path / "report.json"
+        # 0.015 absolute drop: passes default (0.02), fails strict (0.01).
+        self._write_report(baseline, mrr=0.85)
+        self._write_report(report, mrr=0.835)
+
+        rc_default = cli.main(
+            ["quality-gate", "--baseline", str(baseline), "--report", str(report)]
+        )
+        capsys.readouterr()
+        rc_strict = cli.main(
+            [
+                "quality-gate",
+                "--baseline",
+                str(baseline),
+                "--report",
+                str(report),
+                "--strict",
+            ]
+        )
+        assert rc_default == 0
+        assert rc_strict == 1
+
+
 class TestVersionCommand:
     def test_version_prints_something(self, capsys):
         rc = cli.main(["version"])
