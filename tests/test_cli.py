@@ -451,6 +451,54 @@ class TestABCompareCommand:
         assert "failed to build A/B report" in capsys.readouterr().err
 
 
+class TestCalibrateCommand:
+    def test_calibrate_text_output(self, tmp_path: Path, capsys):
+        data = tmp_path / "calibration.json"
+        data.write_text(json.dumps({"scores": [0.1, 0.9], "labels": [0, 1]}), encoding="utf-8")
+
+        rc = cli.main(["calibrate", "--input", str(data), "--bins", "2"])
+
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Calibration report (2 examples)" in out
+        assert "brier_score" in out
+
+    def test_calibrate_json_output_and_file(self, tmp_path: Path, capsys):
+        data = tmp_path / "rows.json"
+        out_path = tmp_path / "calibration-report.json"
+        data.write_text(
+            json.dumps([{"score": 0.2, "label": 0}, {"score": 0.8, "label": 1}]),
+            encoding="utf-8",
+        )
+
+        rc = cli.main(
+            [
+                "calibrate",
+                "--input",
+                str(data),
+                "--bins",
+                "2",
+                "--json",
+                "--output",
+                str(out_path),
+            ]
+        )
+
+        assert rc == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["n"] == 2
+        assert json.loads(out_path.read_text(encoding="utf-8"))["positive_rate"] == 0.5
+
+    def test_calibrate_reports_bad_input(self, tmp_path: Path, capsys):
+        data = tmp_path / "bad.json"
+        data.write_text(json.dumps({"scores": [0.5]}), encoding="utf-8")
+
+        rc = cli.main(["calibrate", "--input", str(data)])
+
+        assert rc == 2
+        assert "failed to build calibration report" in capsys.readouterr().err
+
+
 class TestVersionCommand:
     def test_version_prints_something(self, capsys):
         rc = cli.main(["version"])
