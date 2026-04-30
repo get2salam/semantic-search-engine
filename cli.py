@@ -305,6 +305,61 @@ def cmd_quality_gate(args: argparse.Namespace) -> int:
     return 0 if result.passed else 1
 
 
+def _load_metric_vectors(path: Path) -> dict[str, list[float]]:
+    """Load ``metric -> per-query scores`` from a compact JSON file."""
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        raise ValueError("metric file must be a JSON object")
+
+    vectors: dict[str, list[float]] = {}
+    for metric, values in payload.items():
+        if not isinstance(metric, str):
+            raise ValueError("metric names must be strings")
+        if not isinstance(values, list):
+            raise ValueError(f"metric {metric!r} must be a list of numbers")
+        try:
+            vectors[metric] = [float(v) for v in values]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"metric {metric!r} contains a non-numeric value") from exc
+    return vectors
+
+
+def cmd_ab_compare(args: argparse.Namespace) -> int:
+    """Compare two systems from per-query metric vectors."""
+    from abtest import compare_systems
+
+    try:
+        metrics_a = _load_metric_vectors(Path(args.a))
+        metrics_b = _load_metric_vectors(Path(args.b))
+        report = compare_systems(
+            metrics_a,
+            metrics_b,
+            name_a=args.name_a,
+            name_b=args.name_b,
+            confidence=args.confidence,
+            n_resamples=args.n_resamples,
+            seed=args.seed,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"error: failed to build A/B report: {exc}", file=sys.stderr)
+        return 2
+
+    if args.markdown:
+        Path(args.markdown).write_text(report.to_markdown(alpha=args.alpha), encoding="utf-8")
+    if args.output:
+        Path(args.output).write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    elif args.markdown_stdout:
+        print(report.to_markdown(alpha=args.alpha))
+    else:
+        print("\n".join(report.summary_lines(alpha=args.alpha)))
+
+    return 0
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(_get_version())
     return 0
@@ -424,6 +479,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_gate.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
     p_gate.set_defaults(func=cmd_quality_gate)
+
+    # ab-compare
+    p_ab = sub.add_parser(
+        "ab-compare",
+        help="Compare two retrieval systems from per-query metric JSON files",
+    )
+    p_ab.add_argument("--a", required=True, help="Baseline metric JSON: metric -> values")
+    p_ab.add_argument("--b", required=True, help="Candidate metric JSON: metric -> values")
+    p_ab.add_argument("--name-a", default="A", help="Display name for system A")
+    p_ab.add_argument("--name-b", default="B", help="Display name for system B")
+    p_ab.add_argument("--confidence", type=float, default=0.95, help="Bootstrap CI confidence")
+    p_ab.add_argument("--n-resamples", type=int, default=2000, help="Bootstrap resamples")
+    p_ab.add_argument("--seed", type=int, default=0, help="Random seed")
+    p_ab.add_argument("--alpha", type=float, default=0.05, help="Winner significance level")
+    p_ab.add_argument("--output", "-o", default=None, help="Write full JSON report to this path")
+    p_ab.add_argument("--markdown", default=None, help="Write Markdown report to this path")
+    p_ab.add_argument("--markdown-stdout", action="store_true", help="Print Markdown to stdout")
+    p_ab.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
+    p_ab.set_defaults(func=cmd_ab_compare)
 
     # version
     p_version = sub.add_parser("version", help="Print the engine version")
