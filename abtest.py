@@ -175,7 +175,7 @@ def compare_systems(
         :class:`ABReport`.
     """
     if metrics_a.keys() != metrics_b.keys():
-        missing = (set(metrics_a) ^ set(metrics_b))
+        missing = set(metrics_a) ^ set(metrics_b)
         raise ValueError(f"metric keys differ: {sorted(missing)}")
 
     n_queries: int | None = None
@@ -184,9 +184,7 @@ def compare_systems(
         a = list(metrics_a[metric])
         b = list(metrics_b[metric])
         if len(a) != len(b):
-            raise ValueError(
-                f"metric {metric!r}: length mismatch {len(a)} vs {len(b)}"
-            )
+            raise ValueError(f"metric {metric!r}: length mismatch {len(a)} vs {len(b)}")
         if n_queries is None:
             n_queries = len(a)
         elif len(a) != n_queries:

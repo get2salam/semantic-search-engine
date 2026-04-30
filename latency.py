@@ -77,9 +77,7 @@ class LatencyProfiler:
         try:
             yield
         finally:
-            self._timings.setdefault(name, []).append(
-                (time.perf_counter() - start) * 1000.0
-            )
+            self._timings.setdefault(name, []).append((time.perf_counter() - start) * 1000.0)
 
     def record(self, name: str, duration_ms: float) -> None:
         """Manually append a sample. Useful when timing crosses async boundaries

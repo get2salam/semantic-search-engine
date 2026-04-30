@@ -242,8 +242,6 @@ def _binom_cdf(k: int, n: int, p: float) -> float:
             return 0.0
         return float(log_factorial[n - 1] - log_factorial[j - 1] - log_factorial[n - j - 1])
 
-    log_terms = np.array(
-        [log_binom(j) + j * log_p + (n - j) * log_q for j in range(k + 1)]
-    )
+    log_terms = np.array([log_binom(j) + j * log_p + (n - j) * log_q for j in range(k + 1)])
     m = float(log_terms.max())
     return float(np.exp(m) * np.exp(log_terms - m).sum())
