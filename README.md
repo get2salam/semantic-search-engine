@@ -303,6 +303,44 @@ retrieval configuration. Tweak per-metric thresholds in
 [`examples/quality_gate/config.json`](examples/quality_gate/config.json)
 or use the built-in `--strict` preset.
 
+## 🧪 A/B Retrieval Comparison
+
+Use `ab-compare` when you have per-query metric vectors for two retrieval
+configurations and want uncertainty-aware evidence before changing the
+ranking stack. The command reports bootstrap confidence intervals, paired
+bootstrap p-values, sign-test counts, and a compact winner label.
+
+Input files are intentionally simple JSON objects mapping metric names to
+aligned per-query values:
+
+```json
+{
+  "mrr": [1.0, 0.5, 0.0],
+  "ndcg@10": [0.92, 0.61, 0.18]
+}
+```
+
+Run the comparison and write both machine-readable JSON and Markdown for a
+pull request comment:
+
+```bash
+python cli.py ab-compare \
+  --a baseline-metrics.json \
+  --b candidate-metrics.json \
+  --name-a dense-only \
+  --name-b reranked \
+  --output ab-report.json \
+  --markdown ab-report.md
+```
+
+The terminal summary stays terse for CI logs:
+
+```text
+A/B Comparison: dense-only vs reranked (50 queries)
+- mrr: Δ=+0.0240 (+3.19%), p=0.0180, winner=reranked
+- ndcg@10: Δ=+0.0175 (+2.08%), p=0.0435, winner=reranked
+```
+
 ## 📈 Observability & Hardening
 
 - **Structured logs** — Every line is a single JSON object with
