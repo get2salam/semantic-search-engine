@@ -377,6 +377,80 @@ class TestQualityGateCommand:
         assert rc_strict == 1
 
 
+class TestABCompareCommand:
+    def _write_metrics(self, path: Path, values: dict[str, list[float]]) -> None:
+        path.write_text(json.dumps(values), encoding="utf-8")
+
+    def test_ab_compare_text_output(self, tmp_path: Path, capsys):
+        a = tmp_path / "a.json"
+        b = tmp_path / "b.json"
+        self._write_metrics(a, {"mrr": [0.2, 0.4, 0.6]})
+        self._write_metrics(b, {"mrr": [0.3, 0.5, 0.6]})
+
+        rc = cli.main(
+            [
+                "ab-compare",
+                "--a",
+                str(a),
+                "--b",
+                str(b),
+                "--name-a",
+                "baseline",
+                "--name-b",
+                "candidate",
+                "--n-resamples",
+                "50",
+            ]
+        )
+
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "A/B Comparison: baseline vs candidate" in out
+        assert "- mrr:" in out
+
+    def test_ab_compare_json_and_artifacts(self, tmp_path: Path, capsys):
+        a = tmp_path / "a.json"
+        b = tmp_path / "b.json"
+        out_json = tmp_path / "report.json"
+        out_md = tmp_path / "report.md"
+        self._write_metrics(a, {"ndcg@10": [0.4, 0.5]})
+        self._write_metrics(b, {"ndcg@10": [0.5, 0.6]})
+
+        rc = cli.main(
+            [
+                "ab-compare",
+                "--a",
+                str(a),
+                "--b",
+                str(b),
+                "--n-resamples",
+                "20",
+                "--json",
+                "--output",
+                str(out_json),
+                "--markdown",
+                str(out_md),
+            ]
+        )
+
+        assert rc == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["metrics"][0]["metric"] == "ndcg@10"
+        assert json.loads(out_json.read_text(encoding="utf-8"))["n_queries"] == 2
+        assert "| ndcg@10 |" in out_md.read_text(encoding="utf-8")
+
+    def test_ab_compare_reports_bad_input(self, tmp_path: Path, capsys):
+        bad = tmp_path / "bad.json"
+        good = tmp_path / "good.json"
+        bad.write_text("[]", encoding="utf-8")
+        self._write_metrics(good, {"mrr": [0.5]})
+
+        rc = cli.main(["ab-compare", "--a", str(bad), "--b", str(good)])
+
+        assert rc == 2
+        assert "failed to build A/B report" in capsys.readouterr().err
+
+
 class TestVersionCommand:
     def test_version_prints_something(self, capsys):
         rc = cli.main(["version"])
