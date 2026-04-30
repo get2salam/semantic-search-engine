@@ -1,0 +1,107 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "semantic_search.py"
+      - "evaluation.py"
+      - "eval_data.py"
+      - "hybrid_search.py"
+      - "reranker.py"
+      - "mmr.py"
+      - "query_processor.py"
+      - "quality_gate.py"
+      - "examples/quality_gate/**"
+      - "requirements.txt"
+      - ".github/workflows/quality-gate.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "semantic_search.py"
+      - "evaluation.py"
+      - "eval_data.py"
+      - "hybrid_search.py"
+      - "reranker.py"
+      - "mmr.py"
+      - "query_processor.py"
+      - "quality_gate.py"
+      - "examples/quality_gate/**"
+      - "requirements.txt"
+      - ".github/workflows/quality-gate.yml"
+  # Allow operators to trigger the gate manually for ad-hoc baselines.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  retrieval-quality:
+    name: Retrieval quality regression gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-quality-gate-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-quality-gate-
+
+      - name: Cache sentence-transformers model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/torch/sentence_transformers
+          key: model-all-MiniLM-L6-v2
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run evaluation against committed dataset
+        run: |
+          mkdir -p .tmp
+          python cli.py evaluate \
+            --dataset examples/quality_gate/dataset \
+            --k 1,3,5,10 \
+            --output .tmp/quality_gate_report.json \
+            --quiet --json > /dev/null
+
+      - name: Compare against committed baseline
+        id: gate
+        run: |
+          set +e
+          python cli.py quality-gate \
+            --baseline examples/quality_gate/baseline.json \
+            --report   .tmp/quality_gate_report.json \
+            --config   examples/quality_gate/config.json \
+            --markdown .tmp/quality_gate.md \
+            --output   .tmp/quality_gate.json
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit $status
+
+      - name: Append summary
+        if: always()
+        run: |
+          if [ -f .tmp/quality_gate.md ]; then
+            cat .tmp/quality_gate.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-report
+          path: |
+            .tmp/quality_gate_report.json
+            .tmp/quality_gate.json
+            .tmp/quality_gate.md

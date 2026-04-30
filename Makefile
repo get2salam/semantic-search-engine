@@ -1,4 +1,4 @@
-.PHONY: help install dev build run serve test lint format clean
+.PHONY: help install dev build run serve test lint format clean quality-gate quality-gate-update
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -43,3 +43,18 @@ clean: ## Remove build artifacts and caches
 	rm -rf __pycache__ .pytest_cache .ruff_cache *.egg-info dist build
 	find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name '*.pyc' -delete 2>/dev/null || true
+
+quality-gate: ## Run retrieval quality gate against the committed baseline
+	python cli.py evaluate \
+		--dataset examples/quality_gate/dataset \
+		--k 1,3,5,10 \
+		--output .tmp/quality_gate_report.json \
+		--quiet --json > /dev/null
+	python cli.py quality-gate \
+		--baseline examples/quality_gate/baseline.json \
+		--report   .tmp/quality_gate_report.json \
+		--config   examples/quality_gate/config.json \
+		--markdown .tmp/quality_gate.md
+
+quality-gate-update: ## Regenerate the committed baseline (intentional updates only)
+	python -m examples.quality_gate.regenerate_baseline
