@@ -360,6 +360,53 @@ def cmd_ab_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_score_label_json(path: Path) -> tuple[list[float], list[int]]:
+    """Load calibration inputs from JSON.
+
+    Accepted shapes:
+    - ``{"scores": [...], "labels": [...]}``
+    - ``[{"score": 0.7, "label": 1}, ...]``
+    """
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+
+    if isinstance(payload, dict) and "scores" in payload and "labels" in payload:
+        scores_raw = payload["scores"]
+        labels_raw = payload["labels"]
+    elif isinstance(payload, list):
+        scores_raw = [row["score"] for row in payload]
+        labels_raw = [row["label"] for row in payload]
+    else:
+        raise ValueError("expected {'scores': [...], 'labels': [...]} or rows with score/label")
+
+    try:
+        return [float(v) for v in scores_raw], [int(v) for v in labels_raw]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("scores and labels must be numeric") from exc
+
+
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    """Build score calibration diagnostics from labelled retrieval examples."""
+    from calibration import calibration_report
+
+    try:
+        scores, labels = _load_score_label_json(Path(args.input))
+        report = calibration_report(scores, labels, n_bins=args.bins)
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"error: failed to build calibration report: {exc}", file=sys.stderr)
+        return 2
+
+    if args.output:
+        Path(args.output).write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print("\n".join(report.summary_lines()))
+
+    return 0
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(_get_version())
     return 0
@@ -498,6 +545,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_ab.add_argument("--markdown-stdout", action="store_true", help="Print Markdown to stdout")
     p_ab.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
     p_ab.set_defaults(func=cmd_ab_compare)
+
+    # calibrate
+    p_cal = sub.add_parser(
+        "calibrate",
+        help="Summarise score calibration from labelled retrieval examples",
+    )
+    p_cal.add_argument("--input", "-i", required=True, help="JSON with scores/labels")
+    p_cal.add_argument("--bins", type=int, default=10, help="Number of reliability bins")
+    p_cal.add_argument("--output", "-o", default=None, help="Write JSON report to this path")
+    p_cal.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
+    p_cal.set_defaults(func=cmd_calibrate)
 
     # version
     p_version = sub.add_parser("version", help="Print the engine version")
