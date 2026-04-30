@@ -341,6 +341,41 @@ A/B Comparison: dense-only vs reranked (50 queries)
 - ndcg@10: Δ=+0.0175 (+2.08%), p=0.0435, winner=reranked
 ```
 
+## 🎚️ Score Calibration Diagnostics
+
+When search scores are used as user-facing confidence signals or threshold
+cutoffs, calibration matters. The `calibrate` command converts labelled
+retrieval examples into reliability bins, Brier score, expected calibration
+error (ECE), and max calibration error.
+
+Accepted input shapes:
+
+```json
+{"scores": [0.12, 0.88, 0.73], "labels": [0, 1, 1]}
+```
+
+or row-oriented JSON:
+
+```json
+[
+  {"score": 0.12, "label": 0},
+  {"score": 0.88, "label": 1}
+]
+```
+
+Run:
+
+```bash
+python cli.py calibrate \
+  --input labelled-scores.json \
+  --bins 10 \
+  --output calibration-report.json
+```
+
+Use high ECE or large per-bin gaps as a signal to retune thresholds, add a
+calibration layer, or split analysis by query type before shipping score
+interpretation changes.
+
 ## 📈 Observability & Hardening
 
 - **Structured logs** — Every line is a single JSON object with
