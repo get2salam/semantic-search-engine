@@ -376,6 +376,33 @@ Use high ECE or large per-bin gaps as a signal to retune thresholds, add a
 calibration layer, or split analysis by query type before shipping score
 interpretation changes.
 
+## 🌊 Distribution Drift Reports
+
+`drift-report` compares two numeric distributions with population stability
+index (PSI). Feed it score distributions, embedding-norm snapshots, latency
+samples, or any other one-dimensional monitoring feature you want to track
+between a baseline and a candidate run.
+
+```bash
+python cli.py drift-report \
+  --baseline baseline-scores.json \
+  --current current-scores.json \
+  --bins 10 \
+  --output drift-report.json
+```
+
+Input can be either a raw JSON list:
+
+```json
+[0.12, 0.18, 0.41, 0.77]
+```
+
+or an object with a `values` array. PSI severity labels are intentionally
+plain: `<0.10` low, `<0.25` moderate, otherwise high. Treat high drift as an
+investigation trigger rather than an automatic failure; pair it with the
+quality gate and A/B comparison to decide whether ranking quality actually
+changed.
+
 ## 📈 Observability & Hardening
 
 - **Structured logs** — Every line is a single JSON object with
