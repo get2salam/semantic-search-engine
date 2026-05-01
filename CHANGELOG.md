@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **RAG Readiness Audit** — a pre-flight corpus health check that
+  composes:
+  - `corpus_profile.py` — length percentiles, vocabulary stats
+    (TTR, hapax ratio, top tokens), exact-duplicate detection.
+  - `near_duplicates.py` — embedding-based near-duplicate clustering
+    with a union-find pass over a cosine-similarity threshold.
+  - `query_coverage.py` — three-way query classification
+    (uncovered / ambiguous / confident) using top-1 score plus the
+    existing `diagnostics.query_difficulty` clarity signal.
+  - `audit_report.py` — aggregator that derives a one-word verdict
+    (`ready` / `needs_attention`) and human-readable action items.
+  - `audit_markdown.py` — PR-ready Markdown rendering with a status
+    badge and per-signal tables.
+  - `audit_runner.py` — end-to-end orchestrator with stdlib-only fast
+    path (no encoder loaded) and an opt-in embedding+coverage path.
+- `search-cli audit` subcommand with `--corpus`, `--queries`,
+  `--no-embedding-stats`, `--markdown`, `--output`, `--json`. Honours
+  the canonical CI exit-code contract: `0` ready, `1` needs attention,
+  `2` usage / I/O error.
+- `examples/audit/` ships a deliberately messy 32-doc corpus, a
+  7-query probe (5 in-domain, 2 off-domain), and a walkthrough README.
+- 80+ new unit tests covering the profile, near-duplicate clustering,
+  coverage probe, aggregator, Markdown renderer and CLI surface.
+
 - **Retrieval Quality Gate** (`quality_gate.py`). A model-agnostic CI
   guardrail that compares a current `EvalReport` against a committed
   baseline JSON and flags regressions on MRR, MAP, NDCG@k, P@k and
