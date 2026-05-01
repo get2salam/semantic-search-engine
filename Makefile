@@ -1,4 +1,4 @@
-.PHONY: help install dev build run serve test lint format clean quality-gate quality-gate-update
+.PHONY: help install dev build run serve test lint format clean quality-gate quality-gate-update audit-demo audit-demo-full
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -58,3 +58,15 @@ quality-gate: ## Run retrieval quality gate against the committed baseline
 
 quality-gate-update: ## Regenerate the committed baseline (intentional updates only)
 	python -m examples.quality_gate.regenerate_baseline
+
+audit-demo: ## Run the fast (stdlib-only) RAG readiness audit on the bundled fixture
+	python cli.py audit \
+		--corpus examples/audit/dataset/corpus.txt \
+		--no-embedding-stats
+
+audit-demo-full: ## Run the full audit (encoder + coverage probe) and write Markdown + JSON
+	python cli.py audit \
+		--corpus  examples/audit/dataset/corpus.txt \
+		--queries examples/audit/dataset/queries.txt \
+		--markdown .tmp/audit_report.md \
+		--output   .tmp/audit_report.json
