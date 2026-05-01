@@ -1,0 +1,32 @@
+Machine learning is a subfield of artificial intelligence focused on building systems that learn from data rather than following explicit programmed rules.
+Deep learning uses neural networks with many layers to learn hierarchical representations of input data such as pixels, audio frames or characters.
+Natural language processing combines linguistics and machine learning so that computers can understand, generate and translate human language.
+Transformers are a neural network architecture that uses self-attention to model long-range dependencies in sequences without recurrence.
+BERT is a pre-trained transformer model commonly fine-tuned on smaller labelled datasets for downstream natural language processing tasks.
+Reinforcement learning trains agents to make decisions by maximising cumulative rewards received while interacting with an environment.
+Computer vision enables machines to analyse and interpret images and videos using convolutional and transformer-based models.
+Convolutional neural networks are widely used for image classification, object detection and semantic segmentation tasks.
+Python is a high-level programming language popular for data science, machine learning research and scientific computing workloads.
+JavaScript runs in web browsers and powers most interactive front-end web applications, alongside server-side runtimes such as Node.
+Docker packages applications and their dependencies into portable containers that run consistently across development and production environments.
+Kubernetes orchestrates containerised workloads, automating deployment, scaling, rollouts and self-healing across a cluster of nodes.
+REST APIs expose backend services over HTTP using stateless request-response interactions and resource-oriented URLs.
+GraphQL gives clients a flexible query language to request exactly the data they need from a backend in a single round trip.
+PostgreSQL is an open-source relational database management system known for standards compliance, extensibility and ACID guarantees.
+Vector databases store dense embeddings and provide approximate nearest-neighbour search at scale for retrieval-augmented generation pipelines.
+Retrieval-augmented generation grounds large language model answers in domain documents fetched at query time to reduce hallucination.
+Embeddings map text, images or audio into a dense vector space where semantic similarity corresponds to geometric closeness.
+Sentence-transformers fine-tune transformer encoders with contrastive objectives so that semantically similar sentences land near each other.
+FAISS is a library for efficient similarity search and clustering of dense vectors, supporting both exact and approximate indexes.
+TODO: write a proper paragraph about evaluation metrics here.
+TODO: write a proper paragraph about evaluation metrics here.
+TODO: write a proper paragraph about evaluation metrics here.
+n/a
+n/a
+n/a
+n/a
+n/a
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. This placeholder paragraph survived a prior import and should be flagged by an audit before it pollutes a production retrieval corpus serving real users with real questions about machine learning, vector search and grounded generation pipelines that depend on every indexed document being intentional, descriptive and topical to the domain you actually want the system to answer well within an acceptable latency and precision budget.
+short
+short
+short
