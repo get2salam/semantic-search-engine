@@ -444,6 +444,65 @@ def cmd_drift_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Run the RAG-readiness audit and emit JSON / Markdown artefacts."""
+    from audit_markdown import render_markdown
+    from audit_runner import load_documents, load_queries, run_audit
+
+    corpus_path = Path(args.corpus)
+    if not corpus_path.exists():
+        print(f"error: corpus file not found: {corpus_path}", file=sys.stderr)
+        return 2
+
+    try:
+        documents = load_documents(corpus_path)
+    except (OSError, ValueError) as exc:
+        print(f"error: failed to read corpus {corpus_path}: {exc}", file=sys.stderr)
+        return 2
+    if not documents:
+        print(f"error: no documents found in {corpus_path}", file=sys.stderr)
+        return 2
+
+    queries: list[str] | None = None
+    if args.queries:
+        queries_path = Path(args.queries)
+        if not queries_path.exists():
+            print(f"error: queries file not found: {queries_path}", file=sys.stderr)
+            return 2
+        try:
+            queries = load_queries(queries_path)
+        except (OSError, ValueError) as exc:
+            print(f"error: failed to read queries {queries_path}: {exc}", file=sys.stderr)
+            return 2
+
+    report = run_audit(
+        documents,
+        queries=queries,
+        near_dup_threshold=args.near_dup_threshold,
+        coverage_threshold=args.coverage_threshold,
+        clarity_threshold=args.clarity_threshold,
+        top_k=args.top_k,
+        include_embedding_stats=not args.no_embedding_stats,
+        model_name=args.model,
+    )
+
+    if args.output:
+        Path(args.output).write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+    if args.markdown:
+        Path(args.markdown).write_text(render_markdown(report), encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    elif args.markdown_stdout:
+        print(render_markdown(report))
+    else:
+        print("\n".join(report.summary_lines()))
+
+    # Exit 1 when the audit verdict is "needs_attention" so the CLI is
+    # CI-friendly (gate the build on a clean corpus).
+    return 0 if report.headline_status() == "ready" else 1
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(_get_version())
     return 0
@@ -605,6 +664,59 @@ def build_parser() -> argparse.ArgumentParser:
     p_drift.add_argument("--output", "-o", default=None, help="Write JSON report to this path")
     p_drift.add_argument("--json", action="store_true", help="Print JSON instead of text to stdout")
     p_drift.set_defaults(func=cmd_drift_report)
+
+    # audit
+    p_audit = sub.add_parser(
+        "audit",
+        help="Run a RAG-readiness audit (corpus profile + query coverage)",
+    )
+    p_audit.add_argument(
+        "--corpus",
+        "-c",
+        required=True,
+        help="Corpus file (text, one doc per line, or JSONL with 'text' field)",
+    )
+    p_audit.add_argument(
+        "--queries",
+        default=None,
+        help="Optional query set (text or JSONL). Triggers coverage probe.",
+    )
+    p_audit.add_argument(
+        "--model", "-m", default=None, help="Sentence-transformer model (defaults to settings)"
+    )
+    p_audit.add_argument(
+        "--near-dup-threshold",
+        type=float,
+        default=0.92,
+        help="Cosine cut-off for near-duplicate clustering (default 0.92)",
+    )
+    p_audit.add_argument(
+        "--coverage-threshold",
+        type=float,
+        default=0.30,
+        help="Minimum top-1 score for a query to count as covered (default 0.30)",
+    )
+    p_audit.add_argument(
+        "--clarity-threshold",
+        type=float,
+        default=0.10,
+        help="Minimum clarity for a query to count as confident (default 0.10)",
+    )
+    p_audit.add_argument(
+        "--top-k", type=int, default=5, help="Top-k pulled per query during coverage probe"
+    )
+    p_audit.add_argument(
+        "--no-embedding-stats",
+        action="store_true",
+        help="Skip the encoder and emit a stdlib-only audit (length + vocab + exact dup)",
+    )
+    p_audit.add_argument("--output", "-o", default=None, help="Write JSON report to this path")
+    p_audit.add_argument("--markdown", default=None, help="Write Markdown report to this path")
+    p_audit.add_argument("--markdown-stdout", action="store_true", help="Print Markdown to stdout")
+    p_audit.add_argument(
+        "--json", action="store_true", help="Print JSON instead of plain text to stdout"
+    )
+    p_audit.set_defaults(func=cmd_audit)
 
     # version
     p_version = sub.add_parser("version", help="Print the engine version")
