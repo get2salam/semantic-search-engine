@@ -20,6 +20,7 @@ Ships with a **REST API** (FastAPI), **Docker** support, and **CI/CD** pipeline 
 - 🎯 **Fine-Tuning Pipeline** — Domain-adaptive training with contrastive/triplet loss and k-fold CV
 - 📊 **Retrieval Evaluation** — MRR, MAP, NDCG@k, Precision@k, Recall@k with multi-model benchmarking
 - 🛡️ **Quality Gate** — CI regression guardrail that compares evals against a committed baseline (PR-comment Markdown output)
+- 🩺 **RAG Readiness Audit** — Pre-flight corpus health check (length, vocabulary, exact + near duplicates, embedding-space stats, query coverage) with PR-friendly Markdown report
 - 📂 **BEIR/TREC Loader** — Drop-in loader for corpus/queries/qrels TSV datasets
 - 🐳 **Docker Ready** — Multi-stage build, non-root user, health checks
 - 🔄 **CI/CD** — GitHub Actions: lint → test (matrix) → Docker build & verify
@@ -375,6 +376,53 @@ python cli.py calibrate \
 Use high ECE or large per-bin gaps as a signal to retune thresholds, add a
 calibration layer, or split analysis by query type before shipping score
 interpretation changes.
+
+## 🩺 RAG Readiness Audit
+
+Before you spend time and GPU on a retrieval index, run the `audit`
+subcommand to ask "is this corpus actually ready to back a RAG system?"
+The auditor profiles the corpus across length, vocabulary, exact and
+near-duplicate clusters, embedding-space health (centroid norm,
+hubness, effective rank) and — when a query set is supplied —
+classifies queries into *uncovered*, *ambiguous* or *confident*.
+
+```bash
+# Fast stdlib-only pre-flight (no encoder loaded)
+python cli.py audit \
+  --corpus examples/audit/dataset/corpus.txt \
+  --no-embedding-stats
+
+# Full audit with embedding-space + coverage probe + Markdown report
+python cli.py audit \
+  --corpus examples/audit/dataset/corpus.txt \
+  --queries examples/audit/dataset/queries.txt \
+  --markdown audit_report.md \
+  --output audit_report.json
+```
+
+Headline output looks like:
+
+```text
+RAG Readiness Audit  (NEEDS_ATTENTION)
+  Documents:           32
+  Length (chars):      median=128 p90=146 p99=433
+  Empty / very short:  0 / 8
+  Vocabulary:          unique=319 ttr=0.650 hapax=0.768
+  Exact duplicates:    8 (25.0%)
+  Notes:
+   - 8 very short document(s) — consider merging with neighbours.
+   - Exact-duplicate ratio 25.0% — deduplicate to cut embedding cost
+     and index size.
+   - Hapax ratio 76.8% — heavy domain vocabulary, a domain-tuned
+     encoder may outperform the default.
+```
+
+Exit codes are CI-friendly: `0` ready, `1` needs attention, `2` usage /
+I/O error. Wire it into a pre-merge check to block PRs that introduce
+corpus regressions, and persist `audit_report.json` as a build artefact
+so corpus health can be tracked over time alongside retrieval quality.
+See [`examples/audit/`](examples/audit/) for a runnable walkthrough on
+a deliberately messy fixture.
 
 ## 🌊 Distribution Drift Reports
 
