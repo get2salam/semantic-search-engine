@@ -76,6 +76,8 @@ class RagReadinessReport:
 
     def headline_status(self) -> str:
         """One-word verdict suitable for a Markdown badge / dashboard."""
+        if self.n_documents == 0:
+            return "needs_attention"
         if self.length.empty_count > 0:
             return "needs_attention"
         if self.exact_duplicates.duplication_ratio > 0.20:
@@ -145,6 +147,9 @@ def _build_notes(
 ) -> list[str]:
     """Generate human-friendly notes that turn raw numbers into action items."""
     notes: list[str] = []
+    if length.n == 0:
+        notes.append("Corpus is empty — index at least one document before auditing.")
+        return notes
     if length.empty_count:
         notes.append(
             f"{length.empty_count} empty document(s) found — drop or backfill before indexing."

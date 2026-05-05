@@ -79,6 +79,17 @@ def test_headline_status_ready_for_clean_corpus():
     assert report.headline_status() == "ready"
 
 
+def test_headline_status_flags_empty_corpus():
+    report = _build_minimal([])
+    assert report.n_documents == 0
+    assert report.headline_status() == "needs_attention"
+
+
+def test_notes_flag_empty_corpus_with_actionable_message():
+    report = _build_minimal([])
+    assert any("empty" in n.lower() for n in report.notes)
+
+
 def test_notes_recommend_chunking_long_docs():
     docs = ["short doc"] + ["x" * 10_000]
     report = _build_minimal(docs)
