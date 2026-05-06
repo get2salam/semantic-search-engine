@@ -1,6 +1,6 @@
 import pytest
 
-from rag_chunking import TextChunk, chunk_text
+from rag_chunking import TextChunk, chunk_markdown_sections, chunk_text
 
 
 def test_chunk_text_returns_stable_overlapping_windows():
@@ -41,9 +41,6 @@ def test_text_chunk_token_estimate_is_positive():
     chunk = TextChunk("a", "hello world", 0, 2)
 
     assert chunk.token_estimate >= 1
-
-
-from rag_chunking import chunk_markdown_sections
 
 
 def test_chunk_markdown_sections_preserves_heading_metadata():

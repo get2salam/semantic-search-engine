@@ -4,10 +4,12 @@ from rag_fusion import reciprocal_rank_fusion
 
 
 def test_reciprocal_rank_fusion_rewards_consensus():
-    fused = reciprocal_rank_fusion([
-        [("a", 0.9), ("b", 0.8), ("c", 0.1)],
-        [("b", 0.7), ("a", 0.6), ("d", 0.4)],
-    ])
+    fused = reciprocal_rank_fusion(
+        [
+            [("a", 0.9), ("b", 0.8), ("c", 0.1)],
+            [("b", 0.7), ("a", 0.6), ("d", 0.4)],
+        ]
+    )
 
     assert fused[0][0] in {"a", "b"}
     assert {doc_id for doc_id, _ in fused} == {"a", "b", "c", "d"}

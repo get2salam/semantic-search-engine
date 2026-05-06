@@ -32,9 +32,7 @@ def _match_rule(actual: Any, expected: Any) -> bool:
             return expected["contains"] in _as_list(actual)
         if "min" in expected and actual < expected["min"]:
             return False
-        if "max" in expected and actual > expected["max"]:
-            return False
-        return True
+        return not ("max" in expected and actual > expected["max"])
     if isinstance(expected, set | list | tuple):
         return actual in expected
     return actual == expected
@@ -60,8 +58,4 @@ def filter_records(
 ) -> list[Mapping[str, Any]]:
     """Filter retriever records by nested metadata rules."""
 
-    return [
-        record
-        for record in records
-        if metadata_matches(record.get(metadata_key, {}), filters)
-    ]
+    return [record for record in records if metadata_matches(record.get(metadata_key, {}), filters)]

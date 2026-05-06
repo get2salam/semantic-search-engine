@@ -20,10 +20,12 @@ def test_extract_citation_labels_deduplicates_answer_labels():
 
 
 def test_format_source_bibliography_includes_optional_titles():
-    text = format_source_bibliography([
-        SourceCitation("S1", "alpha.md", "Alpha"),
-        SourceCitation("S2", "beta.md"),
-    ])
+    text = format_source_bibliography(
+        [
+            SourceCitation("S1", "alpha.md", "Alpha"),
+            SourceCitation("S2", "beta.md"),
+        ]
+    )
 
     assert "[S1] alpha.md — Alpha" in text
     assert "[S2] beta.md" in text

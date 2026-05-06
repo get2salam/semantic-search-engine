@@ -1,7 +1,7 @@
 """Deterministic query-planning helpers for AI retrieval flows."""
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 
 _STOPWORDS = {
     "a",
@@ -48,11 +48,7 @@ def generate_query_variants(query: str, *, max_variants: int = 4) -> list[str]:
         return []
 
     variants: list[str] = [normalized]
-    expanded_terms = [
-        _EXPANSIONS[token]
-        for token in normalized.split()
-        if token in _EXPANSIONS
-    ]
+    expanded_terms = [_EXPANSIONS[token] for token in normalized.split() if token in _EXPANSIONS]
     if expanded_terms:
         variants.append(f"{normalized} {' '.join(expanded_terms)}")
 

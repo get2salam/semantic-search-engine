@@ -6,10 +6,9 @@ model.  They produce stable chunk IDs, preserve word offsets, and keep metadata
 attached to every chunk.
 """
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 from typing import Any
-
 
 _WORD_RE = re.compile(r"\S+")
 
