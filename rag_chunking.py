@@ -85,3 +85,73 @@ def chunk_text(
         if end == len(words):
             break
     return chunks
+
+
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify(value: str) -> str:
+    slug = _SLUG_RE.sub("-", value.lower()).strip("-")
+    return slug or "section"
+
+
+def chunk_markdown_sections(
+    markdown: str,
+    *,
+    max_words: int = 180,
+    overlap_words: int = 30,
+    source_id: str = "doc",
+    include_heading: bool = True,
+) -> list[TextChunk]:
+    """Chunk Markdown while preserving heading metadata.
+
+    Each heading starts a new section. Long sections still use overlapping word
+    windows, but every emitted chunk includes ``heading`` and ``heading_level``
+    metadata so downstream RAG prompts can cite where the passage came from.
+    """
+
+    sections: list[tuple[str | None, int | None, list[str]]] = []
+    current_heading: str | None = None
+    current_level: int | None = None
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_lines
+        if current_lines or current_heading:
+            sections.append((current_heading, current_level, current_lines))
+        current_lines = []
+
+    for line in (markdown or "").splitlines():
+        match = _HEADING_RE.match(line)
+        if match:
+            flush()
+            current_heading = match.group(2).strip()
+            current_level = len(match.group(1))
+        else:
+            current_lines.append(line)
+    flush()
+
+    if not sections:
+        return []
+
+    output: list[TextChunk] = []
+    for heading, level, lines in sections:
+        body = "\n".join(line.strip() for line in lines).strip()
+        if not body and not heading:
+            continue
+        section_text = f"{heading}\n{body}".strip() if include_heading and heading else body
+        slug = _slugify(heading or f"section-{len(output) + 1}")
+        section_chunks = chunk_text(
+            section_text,
+            max_words=max_words,
+            overlap_words=overlap_words,
+            source_id=f"{source_id}:{slug}",
+            metadata={
+                "heading": heading,
+                "heading_level": level,
+                "source_id": source_id,
+            },
+        )
+        output.extend(section_chunks)
+    return output
