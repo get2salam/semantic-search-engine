@@ -21,6 +21,7 @@ Ships with a **REST API** (FastAPI), **Docker** support, and **CI/CD** pipeline 
 - 📊 **Retrieval Evaluation** — MRR, MAP, NDCG@k, Precision@k, Recall@k with multi-model benchmarking
 - 🛡️ **Quality Gate** — CI regression guardrail that compares evals against a committed baseline (PR-comment Markdown output)
 - 🩺 **RAG Readiness Audit** — Pre-flight corpus health check (length, vocabulary, exact + near duplicates, embedding-space stats, query coverage) with PR-friendly Markdown report
+- 🧠 **RAG/AI Toolkit** — Deterministic chunking, metadata filters, rank fusion, context windows, grounded prompts, citations, guardrails, and retrieval metrics
 - 📂 **BEIR/TREC Loader** — Drop-in loader for corpus/queries/qrels TSV datasets
 - 🐳 **Docker Ready** — Multi-stage build, non-root user, health checks
 - 🔄 **CI/CD** — GitHub Actions: lint → test (matrix) → Docker build & verify
@@ -83,6 +84,30 @@ docker compose up -d
 docker build -t semantic-search .
 docker run -p 8000:8000 semantic-search
 ```
+
+
+## 🧠 RAG / AI Toolkit
+
+The repo now includes dependency-free helpers for building small grounded AI
+retrieval workflows without calling a hosted model:
+
+- `rag_chunking.py` — stable word and Markdown-section chunks with source metadata.
+- `rag_metadata.py` — nested metadata filters for collection/topic/date routing.
+- `rag_fusion.py` — Reciprocal Rank Fusion for dense + lexical hybrid retrieval.
+- `rag_context.py` — citation-labelled prompt context under a hard budget.
+- `rag_prompting.py` — grounded-answer and safe-refusal prompt templates.
+- `rag_attribution.py` / `rag_guardrails.py` — `[S1]` citations and unsupported-claim checks.
+- `rag_eval.py` / `rag_query.py` — retrieval metrics and deterministic query variants.
+
+Try the public-safe demo:
+
+```bash
+python examples/rag_pipeline_demo.py
+make test-rag
+```
+
+See `docs/RAG_PLAYBOOK.md` and `docs/RAG_EVAL_CHECKLIST.md` for a practical
+workflow.
 
 ## 🌐 API Reference
 
