@@ -41,3 +41,27 @@ def test_text_chunk_token_estimate_is_positive():
     chunk = TextChunk("a", "hello world", 0, 2)
 
     assert chunk.token_estimate >= 1
+
+
+from rag_chunking import chunk_markdown_sections
+
+
+def test_chunk_markdown_sections_preserves_heading_metadata():
+    markdown = """
+# Overview
+Alpha beta gamma.
+
+## Details
+Delta epsilon zeta eta theta.
+"""
+
+    chunks = chunk_markdown_sections(markdown, max_words=4, overlap_words=0, source_id="kb")
+
+    assert chunks[0].chunk_id.startswith("kb:overview")
+    assert chunks[0].metadata["heading"] == "Overview"
+    assert chunks[1].metadata["heading"] == "Details"
+    assert chunks[1].metadata["heading_level"] == 2
+
+
+def test_chunk_markdown_sections_returns_empty_for_blank_input():
+    assert chunk_markdown_sections("\n\n") == []
