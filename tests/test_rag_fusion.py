@@ -20,7 +20,7 @@ def test_reciprocal_rank_fusion_supports_weights_and_top_k():
         top_k=1,
     )
 
-    assert fused == [("dense-first", pytest.approx(2.0 / 61))]
+    assert fused == [("shared", pytest.approx((2.0 / 62) + (1.0 / 62)))]
 
 
 def test_reciprocal_rank_fusion_rejects_bad_weight_count():

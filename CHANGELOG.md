@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dependency-free RAG/AI Toolkit** — chunking, metadata filters, rank
+  fusion, context windows, source attribution, grounded prompt templates,
+  citation guardrails, query planning, retrieval metrics, docs, and a runnable
+  demo.
+
 - **RAG Readiness Audit** — a pre-flight corpus health check that
   composes:
   - `corpus_profile.py` — length percentiles, vocabulary stats

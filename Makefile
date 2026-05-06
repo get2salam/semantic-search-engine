@@ -1,4 +1,4 @@
-.PHONY: help install dev build run serve test lint format clean quality-gate quality-gate-update audit-demo audit-demo-full
+.PHONY: help install dev build run serve test test-rag lint format clean quality-gate quality-gate-update audit-demo audit-demo-full
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -31,6 +31,9 @@ test: ## Run the full test suite
 
 test-api: ## Run API integration tests only
 	pytest tests/test_api.py -v
+
+test-rag: ## Run dependency-free RAG/AI toolkit tests
+	pytest tests/test_rag_*.py -v
 
 lint: ## Run linter (ruff)
 	ruff check .
