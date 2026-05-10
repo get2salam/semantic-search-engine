@@ -1,6 +1,8 @@
 import pytest
 
 from rag_eval import (
+    average_precision_at_k,
+    mean_average_precision,
     mean_reciprocal_rank,
     ndcg_at_k,
     precision_at_k,
@@ -40,3 +42,20 @@ def test_ndcg_at_k_handles_empty_relevant_and_invalid_k():
     assert ndcg_at_k(["a"], set(), 5) == 0.0
     with pytest.raises(ValueError, match="k"):
         ndcg_at_k(["a"], {"a"}, 0)
+
+
+def test_average_precision_rewards_early_relevant_hits():
+    perfect = average_precision_at_k(["a", "b", "c"], {"a", "b"}, 3)
+    delayed = average_precision_at_k(["x", "a", "b"], {"a", "b"}, 3)
+
+    assert perfect == pytest.approx(1.0)
+    assert delayed == pytest.approx((1 / 2 + 2 / 3) / 2)
+
+
+def test_mean_average_precision_validates_alignment():
+    runs = [["a", "b"], ["x", "b", "a"]]
+    qrels = [{"a"}, {"a", "b"}]
+
+    assert mean_average_precision(runs, qrels, 3) == pytest.approx((1.0 + (1 / 2 + 2 / 3) / 2) / 2)
+    with pytest.raises(ValueError, match="same length"):
+        mean_average_precision([["a"]], [{"a"}, {"b"}], 3)

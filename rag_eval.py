@@ -52,6 +52,43 @@ def mean_reciprocal_rank(runs: Sequence[Sequence[str]], qrels: Sequence[Iterable
     return sum(reciprocal_rank(run, rel) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
 
 
+def average_precision_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
+    """Return average precision@k for a single query.
+
+    Averages the precision observed at each rank that contains a relevant document,
+    normalised by the number of relevant items reachable within ``k``. Returns
+    ``0.0`` when the relevance set is empty so callers can safely average across
+    queries without dividing by zero.
+    """
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    relevant_ids = _relevant_set(relevant)
+    if not relevant_ids:
+        return 0.0
+    hits = 0
+    score = 0.0
+    for rank, doc_id in enumerate(retrieved[:k], start=1):
+        if doc_id in relevant_ids:
+            hits += 1
+            score += hits / rank
+    return score / min(k, len(relevant_ids))
+
+
+def mean_average_precision(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
+) -> float:
+    """Return MAP@k across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        average_precision_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
+    ) / len(runs)
+
+
 def ndcg_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
     """Return nDCG@k using binary relevance gains.
 
