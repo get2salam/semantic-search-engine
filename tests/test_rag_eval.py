@@ -2,6 +2,8 @@ import pytest
 
 from rag_eval import (
     average_precision_at_k,
+    hit_at_k,
+    hit_rate_at_k,
     mean_average_precision,
     mean_reciprocal_rank,
     ndcg_at_k,
@@ -50,6 +52,23 @@ def test_average_precision_rewards_early_relevant_hits():
 
     assert perfect == pytest.approx(1.0)
     assert delayed == pytest.approx((1 / 2 + 2 / 3) / 2)
+
+
+def test_hit_at_k_flags_any_relevant_within_topk():
+    assert hit_at_k(["a", "b", "c"], {"c"}, 3) == 1.0
+    assert hit_at_k(["a", "b", "c"], {"c"}, 2) == 0.0
+    assert hit_at_k(["a"], set(), 5) == 0.0
+    with pytest.raises(ValueError, match="k"):
+        hit_at_k(["a"], {"a"}, 0)
+
+
+def test_hit_rate_at_k_averages_across_queries():
+    runs = [["a", "b"], ["x", "y"], ["m", "n"]]
+    qrels = [{"a"}, {"z"}, {"n"}]
+
+    assert hit_rate_at_k(runs, qrels, 2) == pytest.approx(2 / 3)
+    with pytest.raises(ValueError, match="same length"):
+        hit_rate_at_k([["a"]], [{"a"}, {"b"}], 2)
 
 
 def test_mean_average_precision_validates_alignment():

@@ -89,6 +89,34 @@ def mean_average_precision(
     ) / len(runs)
 
 
+def hit_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
+    """Return ``1.0`` when any relevant document appears in the top ``k`` results.
+
+    Useful as a coarse RAG success signal when a single grounded passage is
+    enough to answer the query. Returns ``0.0`` for empty relevance sets so
+    callers can safely average across queries without dividing by zero.
+    """
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    relevant_ids = _relevant_set(relevant)
+    if not relevant_ids:
+        return 0.0
+    return 1.0 if any(doc_id in relevant_ids for doc_id in retrieved[:k]) else 0.0
+
+
+def hit_rate_at_k(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
+) -> float:
+    """Return the mean hit@k across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(hit_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
+
+
 def ndcg_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
     """Return nDCG@k using binary relevance gains.
 
