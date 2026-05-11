@@ -41,9 +41,9 @@ def mean_precision_at_k(
         raise ValueError("runs and qrels must have the same length")
     if not runs:
         return 0.0
-    return sum(
-        precision_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
-    ) / len(runs)
+    return sum(precision_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(
+        runs
+    )
 
 
 def mean_recall_at_k(
@@ -55,9 +55,7 @@ def mean_recall_at_k(
         raise ValueError("runs and qrels must have the same length")
     if not runs:
         return 0.0
-    return sum(
-        recall_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
-    ) / len(runs)
+    return sum(recall_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
 
 
 def reciprocal_rank(retrieved: Sequence[str], relevant: Iterable[str]) -> float:
@@ -169,9 +167,7 @@ def hit_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float
     return 1.0 if any(doc_id in relevant_ids for doc_id in retrieved[:k]) else 0.0
 
 
-def hit_rate_at_k(
-    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
-) -> float:
+def hit_rate_at_k(runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int) -> float:
     """Return the mean hit@k across aligned retrieval runs and relevance sets."""
 
     if len(runs) != len(qrels):
@@ -199,9 +195,7 @@ def f1_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
     return 2 * precision * recall / (precision + recall)
 
 
-def mean_f1_at_k(
-    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
-) -> float:
+def mean_f1_at_k(runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int) -> float:
     """Return the mean F1@k across aligned retrieval runs and relevance sets."""
 
     if len(runs) != len(qrels):
@@ -228,9 +222,7 @@ def r_precision(retrieved: Sequence[str], relevant: Iterable[str]) -> float:
     return sum(1 for doc_id in retrieved[:cutoff] if doc_id in relevant_ids) / cutoff
 
 
-def mean_r_precision(
-    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]]
-) -> float:
+def mean_r_precision(runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]]) -> float:
     """Return mean R-precision across aligned retrieval runs and relevance sets."""
 
     if len(runs) != len(qrels):
@@ -263,9 +255,7 @@ def ndcg_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> floa
     return dcg / idcg if idcg else 0.0
 
 
-def mean_ndcg_at_k(
-    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
-) -> float:
+def mean_ndcg_at_k(runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int) -> float:
     """Return the mean nDCG@k across aligned retrieval runs and relevance sets.
 
     Provides the rank-aware aggregate that complements :func:`mean_average_precision`
@@ -281,9 +271,7 @@ def mean_ndcg_at_k(
     return sum(ndcg_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
 
 
-def graded_ndcg_at_k(
-    retrieved: Sequence[str], relevance: Mapping[str, float], k: int
-) -> float:
+def graded_ndcg_at_k(retrieved: Sequence[str], relevance: Mapping[str, float], k: int) -> float:
     """Return nDCG@k using graded relevance gains supplied per document.
 
     Generalises :func:`ndcg_at_k` for evaluations that distinguish "highly
@@ -323,9 +311,9 @@ def mean_graded_ndcg_at_k(
         raise ValueError("runs and qrels must have the same length")
     if not runs:
         return 0.0
-    return sum(
-        graded_ndcg_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
-    ) / len(runs)
+    return sum(graded_ndcg_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(
+        runs
+    )
 
 
 def rank_biased_precision(
@@ -350,9 +338,7 @@ def rank_biased_precision(
     if not relevant_ids:
         return 0.0
     weighted = sum(
-        persistence**rank
-        for rank, doc_id in enumerate(retrieved[:k])
-        if doc_id in relevant_ids
+        persistence**rank for rank, doc_id in enumerate(retrieved[:k]) if doc_id in relevant_ids
     )
     return (1.0 - persistence) * weighted
 

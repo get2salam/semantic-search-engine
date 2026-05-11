@@ -204,9 +204,7 @@ def test_graded_ndcg_at_k_rewards_higher_grades_first():
 def test_mean_graded_ndcg_at_k_averages_and_validates_alignment():
     runs = [["a", "b"], ["b", "a"]]
     qrels = [{"a": 3.0, "b": 1.0}, {"a": 3.0, "b": 1.0}]
-    expected = (
-        graded_ndcg_at_k(runs[0], qrels[0], 2) + graded_ndcg_at_k(runs[1], qrels[1], 2)
-    ) / 2
+    expected = (graded_ndcg_at_k(runs[0], qrels[0], 2) + graded_ndcg_at_k(runs[1], qrels[1], 2)) / 2
 
     assert mean_graded_ndcg_at_k(runs, qrels, 2) == pytest.approx(expected)
     assert mean_graded_ndcg_at_k([], [], 3) == 0.0
