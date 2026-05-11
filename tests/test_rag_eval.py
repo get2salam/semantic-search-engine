@@ -3,10 +3,12 @@ import pytest
 from rag_eval import (
     average_precision_at_k,
     f1_at_k,
+    graded_ndcg_at_k,
     hit_at_k,
     hit_rate_at_k,
     mean_average_precision,
     mean_f1_at_k,
+    mean_graded_ndcg_at_k,
     mean_ndcg_at_k,
     mean_precision_at_k,
     mean_r_precision,
@@ -154,3 +156,28 @@ def test_mean_ndcg_at_k_averages_and_validates_alignment():
     assert mean_ndcg_at_k([], [], 3) == 0.0
     with pytest.raises(ValueError, match="same length"):
         mean_ndcg_at_k([["a"]], [{"a"}, {"b"}], 3)
+
+
+def test_graded_ndcg_at_k_rewards_higher_grades_first():
+    grades = {"a": 3.0, "b": 1.0}
+
+    assert graded_ndcg_at_k(["a", "b", "c"], grades, 3) == pytest.approx(1.0)
+    swapped = graded_ndcg_at_k(["b", "a", "c"], grades, 3)
+    assert 0.0 < swapped < 1.0
+    # Non-positive grades are treated as irrelevant; collapses to zero.
+    assert graded_ndcg_at_k(["a"], {"a": 0.0, "b": -1.0}, 1) == 0.0
+    with pytest.raises(ValueError, match="k"):
+        graded_ndcg_at_k(["a"], {"a": 1.0}, 0)
+
+
+def test_mean_graded_ndcg_at_k_averages_and_validates_alignment():
+    runs = [["a", "b"], ["b", "a"]]
+    qrels = [{"a": 3.0, "b": 1.0}, {"a": 3.0, "b": 1.0}]
+    expected = (
+        graded_ndcg_at_k(runs[0], qrels[0], 2) + graded_ndcg_at_k(runs[1], qrels[1], 2)
+    ) / 2
+
+    assert mean_graded_ndcg_at_k(runs, qrels, 2) == pytest.approx(expected)
+    assert mean_graded_ndcg_at_k([], [], 3) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        mean_graded_ndcg_at_k([["a"]], [{"a": 1.0}, {"b": 1.0}], 2)

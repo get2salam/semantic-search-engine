@@ -1,6 +1,6 @@
 """Small retrieval evaluation metrics for RAG experiments."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from math import log2
 
 
@@ -243,3 +243,50 @@ def mean_ndcg_at_k(
     if not runs:
         return 0.0
     return sum(ndcg_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
+
+
+def graded_ndcg_at_k(
+    retrieved: Sequence[str], relevance: Mapping[str, float], k: int
+) -> float:
+    """Return nDCG@k using graded relevance gains supplied per document.
+
+    Generalises :func:`ndcg_at_k` for evaluations that distinguish "highly
+    relevant" from "marginally relevant" passages. Documents with non-positive
+    gain are treated as irrelevant, and the ideal ranking sorts the supplied
+    gains in descending order. Returns ``0.0`` when no positive gain is
+    available so callers can safely average across queries without dividing
+    by zero.
+    """
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    grades = {doc_id: float(gain) for doc_id, gain in relevance.items() if gain > 0}
+    if not grades:
+        return 0.0
+    dcg = sum(
+        grades.get(doc_id, 0.0) / log2(rank + 1)
+        for rank, doc_id in enumerate(retrieved[:k], start=1)
+    )
+    ideal = sorted(grades.values(), reverse=True)[:k]
+    idcg = sum(gain / log2(rank + 1) for rank, gain in enumerate(ideal, start=1))
+    return dcg / idcg if idcg else 0.0
+
+
+def mean_graded_ndcg_at_k(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Mapping[str, float]], k: int
+) -> float:
+    """Return the mean graded nDCG@k across aligned runs and graded relevance maps.
+
+    Complements :func:`mean_ndcg_at_k` for evaluations where relevance is graded
+    rather than binary. Each query contributes ``0.0`` when its grades are all
+    non-positive so callers can safely average heterogeneous evaluation slices
+    without dividing by zero.
+    """
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        graded_ndcg_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
+    ) / len(runs)
