@@ -8,7 +8,9 @@ from rag_eval import (
     mean_average_precision,
     mean_f1_at_k,
     mean_ndcg_at_k,
+    mean_precision_at_k,
     mean_r_precision,
+    mean_recall_at_k,
     mean_reciprocal_rank,
     ndcg_at_k,
     precision_at_k,
@@ -114,6 +116,22 @@ def test_mean_r_precision_averages_and_validates_alignment():
     assert mean_r_precision(runs, qrels) == pytest.approx((0.5 + 1.0) / 2)
     with pytest.raises(ValueError, match="same length"):
         mean_r_precision([["a"]], [{"a"}, {"b"}])
+
+
+def test_mean_precision_and_recall_at_k_average_across_queries():
+    runs = [["a", "b", "c"], ["x", "b", "y"]]
+    qrels = [{"a", "b"}, {"a", "b"}]
+
+    # Per-query precision@3 = 2/3 and 1/3 -> mean = 0.5.
+    assert mean_precision_at_k(runs, qrels, 3) == pytest.approx(0.5)
+    # Per-query recall@3 = 1.0 and 0.5 -> mean = 0.75.
+    assert mean_recall_at_k(runs, qrels, 3) == pytest.approx(0.75)
+    assert mean_precision_at_k([], [], 3) == 0.0
+    assert mean_recall_at_k([], [], 3) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        mean_precision_at_k([["a"]], [{"a"}, {"b"}], 2)
+    with pytest.raises(ValueError, match="same length"):
+        mean_recall_at_k([["a"]], [{"a"}, {"b"}], 2)
 
 
 def test_mean_average_precision_validates_alignment():

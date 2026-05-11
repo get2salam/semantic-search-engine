@@ -32,6 +32,34 @@ def recall_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> fl
     return len(top & relevant_ids) / len(relevant_ids)
 
 
+def mean_precision_at_k(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
+) -> float:
+    """Return mean precision@k across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        precision_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
+    ) / len(runs)
+
+
+def mean_recall_at_k(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
+) -> float:
+    """Return mean recall@k across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        recall_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
+    ) / len(runs)
+
+
 def reciprocal_rank(retrieved: Sequence[str], relevant: Iterable[str]) -> float:
     """Return reciprocal rank for the first relevant result."""
 
