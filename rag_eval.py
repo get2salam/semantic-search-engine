@@ -337,3 +337,48 @@ def mean_rank_biased_precision(
         rank_biased_precision(run, rel, persistence, k)
         for run, rel in zip(runs, qrels, strict=True)
     ) / len(runs)
+
+
+def expected_reciprocal_rank(
+    retrieved: Sequence[str], relevance: Mapping[str, float], k: int
+) -> float:
+    """Return Expected Reciprocal Rank@k under graded relevance.
+
+    ERR models a user who scans the ranking and stops at rank ``r`` with a
+    probability that grows with the document's grade. Each grade ``g`` maps to a
+    stopping probability ``(2**g - 1) / 2**g_max`` where ``g_max`` is the largest
+    supplied positive grade, so the metric is invariant to a uniform rescaling
+    of the grades. Returns ``0.0`` when no positive grade is supplied so callers
+    can safely average across queries without dividing by zero.
+    """
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    grades = {doc_id: float(gain) for doc_id, gain in relevance.items() if gain > 0}
+    if not grades:
+        return 0.0
+    denom = 2.0 ** max(grades.values())
+    score = 0.0
+    survival = 1.0
+    for rank, doc_id in enumerate(retrieved[:k], start=1):
+        gain = grades.get(doc_id, 0.0)
+        if gain <= 0:
+            continue
+        stop = (2.0**gain - 1.0) / denom
+        score += survival * stop / rank
+        survival *= 1.0 - stop
+    return score
+
+
+def mean_expected_reciprocal_rank(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Mapping[str, float]], k: int
+) -> float:
+    """Return mean ERR@k across aligned runs and graded relevance maps."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        expected_reciprocal_rank(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
+    ) / len(runs)

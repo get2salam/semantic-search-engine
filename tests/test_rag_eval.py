@@ -2,11 +2,13 @@ import pytest
 
 from rag_eval import (
     average_precision_at_k,
+    expected_reciprocal_rank,
     f1_at_k,
     graded_ndcg_at_k,
     hit_at_k,
     hit_rate_at_k,
     mean_average_precision,
+    mean_expected_reciprocal_rank,
     mean_f1_at_k,
     mean_graded_ndcg_at_k,
     mean_ndcg_at_k,
@@ -213,3 +215,32 @@ def test_mean_rank_biased_precision_averages_and_validates_alignment():
     assert mean_rank_biased_precision([], [], 0.5, 3) == 0.0
     with pytest.raises(ValueError, match="same length"):
         mean_rank_biased_precision([["a"]], [{"a"}, {"b"}], 0.5, 2)
+
+
+def test_expected_reciprocal_rank_uses_graded_stopping_probabilities():
+    # grade=2 at rank 1 then grade=1 at rank 2, g_max=2 -> stops 0.75 and 0.25.
+    # Score = 0.75/1 + (1 - 0.75) * 0.25 / 2 = 0.78125.
+    grades = {"a": 2.0, "b": 1.0}
+    assert expected_reciprocal_rank(["a", "b"], grades, 2) == pytest.approx(0.78125)
+    # Demoting the higher-grade doc strictly lowers ERR.
+    swapped = expected_reciprocal_rank(["b", "a"], grades, 2)
+    assert swapped < 0.78125
+    # Uniform grades with single relevant doc: rank 1 -> 0.5, rank 3 -> 1/6.
+    assert expected_reciprocal_rank(["a", "x", "y"], {"a": 1.0}, 3) == pytest.approx(0.5)
+    assert expected_reciprocal_rank(["x", "y", "a"], {"a": 1.0}, 3) == pytest.approx(1 / 6)
+
+
+def test_expected_reciprocal_rank_validates_inputs_and_empty_grades():
+    assert expected_reciprocal_rank(["a"], {"a": 0.0, "b": -1.0}, 1) == 0.0
+    with pytest.raises(ValueError, match="k"):
+        expected_reciprocal_rank(["a"], {"a": 1.0}, 0)
+
+
+def test_mean_expected_reciprocal_rank_averages_and_validates_alignment():
+    runs = [["a", "x", "y"], ["x", "y", "a"]]
+    qrels = [{"a": 1.0}, {"a": 1.0}]
+    # Per-query ERR@3 -> 0.5 and 1/6; mean = (0.5 + 1/6) / 2.
+    assert mean_expected_reciprocal_rank(runs, qrels, 3) == pytest.approx((0.5 + 1 / 6) / 2)
+    assert mean_expected_reciprocal_rank([], [], 3) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        mean_expected_reciprocal_rank([["a"]], [{"a": 1.0}, {"b": 1.0}], 2)
