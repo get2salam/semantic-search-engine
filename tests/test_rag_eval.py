@@ -12,11 +12,13 @@ from rag_eval import (
     mean_ndcg_at_k,
     mean_precision_at_k,
     mean_r_precision,
+    mean_rank_biased_precision,
     mean_recall_at_k,
     mean_reciprocal_rank,
     ndcg_at_k,
     precision_at_k,
     r_precision,
+    rank_biased_precision,
     recall_at_k,
     reciprocal_rank,
 )
@@ -181,3 +183,33 @@ def test_mean_graded_ndcg_at_k_averages_and_validates_alignment():
     assert mean_graded_ndcg_at_k([], [], 3) == 0.0
     with pytest.raises(ValueError, match="same length"):
         mean_graded_ndcg_at_k([["a"]], [{"a": 1.0}, {"b": 1.0}], 2)
+
+
+def test_rank_biased_precision_weights_early_hits_more_heavily():
+    # p=0.5 with hits at every rank: (1-0.5)*(1 + 0.5 + 0.25) = 0.875.
+    assert rank_biased_precision(["a", "b", "c"], {"a", "b", "c"}, 0.5, 3) == pytest.approx(0.875)
+    # Same hit at rank 1 vs rank 3 -> 0.5 vs 0.125.
+    assert rank_biased_precision(["a", "x", "y"], {"a"}, 0.5, 3) == pytest.approx(0.5)
+    assert rank_biased_precision(["x", "y", "a"], {"a"}, 0.5, 3) == pytest.approx(0.125)
+    # Empty relevance collapses to zero rather than dividing by zero downstream.
+    assert rank_biased_precision(["a"], set(), 0.5, 3) == 0.0
+
+
+def test_rank_biased_precision_validates_inputs():
+    with pytest.raises(ValueError, match="k"):
+        rank_biased_precision(["a"], {"a"}, 0.5, 0)
+    with pytest.raises(ValueError, match="persistence"):
+        rank_biased_precision(["a"], {"a"}, 0.0, 3)
+    with pytest.raises(ValueError, match="persistence"):
+        rank_biased_precision(["a"], {"a"}, 1.0, 3)
+
+
+def test_mean_rank_biased_precision_averages_and_validates_alignment():
+    runs = [["a", "b"], ["x", "a"]]
+    qrels = [{"a"}, {"a"}]
+
+    # Per-query RBP@2 with p=0.5 -> 0.5 and 0.25; mean = 0.375.
+    assert mean_rank_biased_precision(runs, qrels, 0.5, 2) == pytest.approx(0.375)
+    assert mean_rank_biased_precision([], [], 0.5, 3) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        mean_rank_biased_precision([["a"]], [{"a"}, {"b"}], 0.5, 2)

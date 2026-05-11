@@ -290,3 +290,50 @@ def mean_graded_ndcg_at_k(
     return sum(
         graded_ndcg_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
     ) / len(runs)
+
+
+def rank_biased_precision(
+    retrieved: Sequence[str], relevant: Iterable[str], persistence: float, k: int
+) -> float:
+    """Return Rank-Biased Precision@k with the given user-persistence parameter.
+
+    RBP models a user who inspects rank ``i`` with probability
+    ``persistence ** (i - 1)``, so early hits contribute much more than late hits
+    and the ``(1 - persistence)`` normaliser keeps the score in ``[0, 1]`` at any
+    cutoff. Unlike nDCG and MAP it does not require the full relevance set to be
+    enumerated, which makes it well-suited to RAG evaluations with shallow pools.
+    Returns ``0.0`` when the relevance set is empty so callers can safely average
+    across queries without dividing by zero.
+    """
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    if not 0.0 < persistence < 1.0:
+        raise ValueError("persistence must be strictly between 0 and 1")
+    relevant_ids = _relevant_set(relevant)
+    if not relevant_ids:
+        return 0.0
+    weighted = sum(
+        persistence**rank
+        for rank, doc_id in enumerate(retrieved[:k])
+        if doc_id in relevant_ids
+    )
+    return (1.0 - persistence) * weighted
+
+
+def mean_rank_biased_precision(
+    runs: Sequence[Sequence[str]],
+    qrels: Sequence[Iterable[str]],
+    persistence: float,
+    k: int,
+) -> float:
+    """Return mean RBP@k across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        rank_biased_precision(run, rel, persistence, k)
+        for run, rel in zip(runs, qrels, strict=True)
+    ) / len(runs)
