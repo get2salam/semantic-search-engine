@@ -17,12 +17,14 @@ from rag_eval import (
     mean_rank_biased_precision,
     mean_recall_at_k,
     mean_reciprocal_rank,
+    mean_reciprocal_rank_at_k,
     ndcg_at_k,
     precision_at_k,
     r_precision,
     rank_biased_precision,
     recall_at_k,
     reciprocal_rank,
+    reciprocal_rank_at_k,
 )
 
 
@@ -43,6 +45,31 @@ def test_mean_reciprocal_rank_validates_alignment():
     assert mean_reciprocal_rank([["a"], ["x", "b"]], [{"a"}, {"b"}]) == pytest.approx(0.75)
     with pytest.raises(ValueError, match="same length"):
         mean_reciprocal_rank([["a"]], [{"a"}, {"b"}])
+
+
+def test_reciprocal_rank_at_k_bounds_first_relevant_to_cutoff():
+    # Hit at rank 2 within k=3 -> 1/2; same hit excluded at k=1 -> 0.0.
+    assert reciprocal_rank_at_k(["x", "a", "b"], {"a"}, 3) == pytest.approx(0.5)
+    assert reciprocal_rank_at_k(["x", "a", "b"], {"a"}, 1) == 0.0
+    # Matches reciprocal_rank when the relevant doc is within the cutoff.
+    assert reciprocal_rank_at_k(["a", "b"], {"b"}, 5) == pytest.approx(0.5)
+    # Empty relevance collapses to zero rather than dividing by zero downstream.
+    assert reciprocal_rank_at_k(["a"], set(), 3) == 0.0
+    with pytest.raises(ValueError, match="k"):
+        reciprocal_rank_at_k(["a"], {"a"}, 0)
+
+
+def test_mean_reciprocal_rank_at_k_averages_and_validates_alignment():
+    runs = [["a", "b"], ["x", "y", "b"]]
+    qrels = [{"a"}, {"b"}]
+
+    # Per-query RR@2 -> 1.0 and 0.0; mean = 0.5.
+    assert mean_reciprocal_rank_at_k(runs, qrels, 2) == pytest.approx(0.5)
+    # Raising k surfaces the deep hit: 1.0 and 1/3.
+    assert mean_reciprocal_rank_at_k(runs, qrels, 3) == pytest.approx((1.0 + 1 / 3) / 2)
+    assert mean_reciprocal_rank_at_k([], [], 3) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        mean_reciprocal_rank_at_k([["a"]], [{"a"}, {"b"}], 2)
 
 
 def test_ndcg_at_k_rewards_higher_ranked_relevant_results():

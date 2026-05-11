@@ -80,6 +80,42 @@ def mean_reciprocal_rank(runs: Sequence[Sequence[str]], qrels: Sequence[Iterable
     return sum(reciprocal_rank(run, rel) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
 
 
+def reciprocal_rank_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
+    """Return reciprocal rank restricted to the top ``k`` retrieved documents.
+
+    Bounds :func:`reciprocal_rank` to a fixed retrieval depth, which mirrors how
+    MRR@k is typically reported in RAG leaderboards: queries whose first
+    relevant hit falls outside the cutoff contribute ``0.0`` rather than a tiny
+    reciprocal that would otherwise reward deep-but-late retrieval. Returns
+    ``0.0`` when the relevance set is empty so callers can safely average
+    across queries without dividing by zero.
+    """
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    relevant_ids = _relevant_set(relevant)
+    if not relevant_ids:
+        return 0.0
+    for index, doc_id in enumerate(retrieved[:k], start=1):
+        if doc_id in relevant_ids:
+            return 1 / index
+    return 0.0
+
+
+def mean_reciprocal_rank_at_k(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
+) -> float:
+    """Return MRR@k across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        reciprocal_rank_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
+    ) / len(runs)
+
+
 def average_precision_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
     """Return average precision@k for a single query.
 
