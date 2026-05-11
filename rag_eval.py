@@ -147,6 +147,35 @@ def mean_f1_at_k(
     return sum(f1_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
 
 
+def r_precision(retrieved: Sequence[str], relevant: Iterable[str]) -> float:
+    """Return R-precision: precision at rank ``R``, where ``R = |relevant|``.
+
+    R-precision adapts the cutoff to the number of relevant documents for the
+    query, which makes it comparable across queries with very different
+    relevance set sizes without picking a fixed ``k``. Returns ``0.0`` when the
+    relevance set is empty so callers can safely average across queries without
+    dividing by zero.
+    """
+
+    relevant_ids = _relevant_set(relevant)
+    if not relevant_ids:
+        return 0.0
+    cutoff = len(relevant_ids)
+    return sum(1 for doc_id in retrieved[:cutoff] if doc_id in relevant_ids) / cutoff
+
+
+def mean_r_precision(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]]
+) -> float:
+    """Return mean R-precision across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(r_precision(run, rel) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
+
+
 def ndcg_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
     """Return nDCG@k using binary relevance gains.
 

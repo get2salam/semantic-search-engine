@@ -7,9 +7,11 @@ from rag_eval import (
     hit_rate_at_k,
     mean_average_precision,
     mean_f1_at_k,
+    mean_r_precision,
     mean_reciprocal_rank,
     ndcg_at_k,
     precision_at_k,
+    r_precision,
     recall_at_k,
     reciprocal_rank,
 )
@@ -93,6 +95,24 @@ def test_mean_f1_at_k_averages_and_validates_alignment():
     assert mean_f1_at_k(runs, qrels, 2) == pytest.approx(0.5)
     with pytest.raises(ValueError, match="same length"):
         mean_f1_at_k([["a"]], [{"a"}, {"b"}], 2)
+
+
+def test_r_precision_uses_relevance_set_size_as_cutoff():
+    # |relevant|=2, so cutoff=2: top-2 has one hit out of two relevant.
+    assert r_precision(["a", "x", "b"], {"a", "b"}) == pytest.approx(0.5)
+    # Perfect ordering at the adaptive cutoff yields 1.0.
+    assert r_precision(["a", "b", "c"], {"a", "b"}) == pytest.approx(1.0)
+    # Empty relevance collapses to zero rather than dividing by zero.
+    assert r_precision(["a"], set()) == 0.0
+
+
+def test_mean_r_precision_averages_and_validates_alignment():
+    runs = [["a", "x", "b"], ["c", "d"]]
+    qrels = [{"a", "b"}, {"c", "d"}]
+
+    assert mean_r_precision(runs, qrels) == pytest.approx((0.5 + 1.0) / 2)
+    with pytest.raises(ValueError, match="same length"):
+        mean_r_precision([["a"]], [{"a"}, {"b"}])
 
 
 def test_mean_average_precision_validates_alignment():
