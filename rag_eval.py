@@ -404,3 +404,52 @@ def mean_expected_reciprocal_rank(
     return sum(
         expected_reciprocal_rank(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
     ) / len(runs)
+
+
+def bpref(
+    retrieved: Sequence[str],
+    relevant: Iterable[str],
+    judged_nonrelevant: Iterable[str],
+) -> float:
+    """Return Binary Preference (Bpref) using only judged documents.
+
+    Bpref counts how often a judged non-relevant document is ranked above a
+    judged relevant one, ignoring unjudged retrievals entirely. The
+    ``min(seen, R) / R`` cap keeps a single deep relevant hit from dominating
+    the penalty, and the ``1 / R`` normaliser keeps the score in ``[0, 1]``.
+    Designed for RAG evaluations with shallow judgment pools, where Recall@k
+    and nDCG@k can misattribute unjudged retrievals. Documents flagged as both
+    relevant and non-relevant are treated as relevant. Returns ``0.0`` when
+    the relevance set is empty so callers can safely average across queries
+    without dividing by zero.
+    """
+
+    relevant_ids = _relevant_set(relevant)
+    if not relevant_ids:
+        return 0.0
+    nonrelevant_ids = _relevant_set(judged_nonrelevant) - relevant_ids
+    capacity = len(relevant_ids)
+    seen_nonrelevant = 0
+    score = 0.0
+    for doc_id in retrieved:
+        if doc_id in relevant_ids:
+            score += 1.0 - min(seen_nonrelevant, capacity) / capacity
+        elif doc_id in nonrelevant_ids:
+            seen_nonrelevant += 1
+    return score / capacity
+
+
+def mean_bpref(
+    runs: Sequence[Sequence[str]],
+    qrels: Sequence[Iterable[str]],
+    nonrelevant: Sequence[Iterable[str]],
+) -> float:
+    """Return mean Bpref across aligned retrieval runs and judgment sets."""
+
+    if not (len(runs) == len(qrels) == len(nonrelevant)):
+        raise ValueError("runs, qrels and nonrelevant must have the same length")
+    if not runs:
+        return 0.0
+    return sum(
+        bpref(run, rel, neg) for run, rel, neg in zip(runs, qrels, nonrelevant, strict=True)
+    ) / len(runs)

@@ -2,12 +2,14 @@ import pytest
 
 from rag_eval import (
     average_precision_at_k,
+    bpref,
     expected_reciprocal_rank,
     f1_at_k,
     graded_ndcg_at_k,
     hit_at_k,
     hit_rate_at_k,
     mean_average_precision,
+    mean_bpref,
     mean_expected_reciprocal_rank,
     mean_f1_at_k,
     mean_graded_ndcg_at_k,
@@ -269,3 +271,29 @@ def test_mean_expected_reciprocal_rank_averages_and_validates_alignment():
     assert mean_expected_reciprocal_rank([], [], 3) == 0.0
     with pytest.raises(ValueError, match="same length"):
         mean_expected_reciprocal_rank([["a"]], [{"a": 1.0}, {"b": 1.0}], 2)
+
+
+def test_bpref_penalises_judged_nonrelevant_ranked_above_relevant():
+    # R=2, one non-relevant between the two relevant hits:
+    # "a" contributes 1.0 (no prior non-relevant); "b" contributes 1 - 1/2 = 0.5.
+    assert bpref(["a", "x", "b"], {"a", "b"}, {"x"}) == pytest.approx(0.75)
+    # Perfect ordering with no judged non-relevant -> 1.0.
+    assert bpref(["a", "b"], {"a", "b"}, set()) == pytest.approx(1.0)
+    # Unjudged documents are ignored: "u" neither helps nor hurts.
+    assert bpref(["u", "a", "u", "b"], {"a", "b"}, set()) == pytest.approx(1.0)
+    # All judged non-relevant ahead of the single relevant hit: penalty saturates.
+    assert bpref(["x", "y", "a"], {"a"}, {"x", "y"}) == 0.0
+    # Empty relevance collapses to zero rather than dividing by zero downstream.
+    assert bpref(["a"], set(), {"x"}) == 0.0
+
+
+def test_mean_bpref_averages_and_validates_alignment():
+    runs = [["a", "x", "b"], ["a", "b"]]
+    qrels = [{"a", "b"}, {"a", "b"}]
+    negatives = [{"x"}, set()]
+
+    # Per-query Bpref -> 0.75 and 1.0; mean = 0.875.
+    assert mean_bpref(runs, qrels, negatives) == pytest.approx(0.875)
+    assert mean_bpref([], [], []) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        mean_bpref([["a"]], [{"a"}, {"b"}], [set(), set()])
