@@ -7,6 +7,7 @@ from rag_eval import (
     hit_rate_at_k,
     mean_average_precision,
     mean_f1_at_k,
+    mean_ndcg_at_k,
     mean_r_precision,
     mean_reciprocal_rank,
     ndcg_at_k,
@@ -122,3 +123,16 @@ def test_mean_average_precision_validates_alignment():
     assert mean_average_precision(runs, qrels, 3) == pytest.approx((1.0 + (1 / 2 + 2 / 3) / 2) / 2)
     with pytest.raises(ValueError, match="same length"):
         mean_average_precision([["a"]], [{"a"}, {"b"}], 3)
+
+
+def test_mean_ndcg_at_k_averages_and_validates_alignment():
+    runs = [["a", "b", "c"], ["c", "a", "b"]]
+    qrels = [{"a", "b"}, {"a", "b"}]
+    expected = (ndcg_at_k(runs[0], qrels[0], 3) + ndcg_at_k(runs[1], qrels[1], 3)) / 2
+
+    assert mean_ndcg_at_k(runs, qrels, 3) == pytest.approx(expected)
+    # Empty relevance sets contribute zero rather than dividing by zero.
+    assert mean_ndcg_at_k([["a"], ["b"]], [set(), {"b"}], 2) == pytest.approx(0.5)
+    assert mean_ndcg_at_k([], [], 3) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        mean_ndcg_at_k([["a"]], [{"a"}, {"b"}], 3)

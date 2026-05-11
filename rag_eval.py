@@ -197,3 +197,21 @@ def ndcg_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> floa
     ideal_hits = min(k, len(relevant_ids))
     idcg = sum(1 / log2(rank + 1) for rank in range(1, ideal_hits + 1))
     return dcg / idcg if idcg else 0.0
+
+
+def mean_ndcg_at_k(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
+) -> float:
+    """Return the mean nDCG@k across aligned retrieval runs and relevance sets.
+
+    Provides the rank-aware aggregate that complements :func:`mean_average_precision`
+    and :func:`mean_r_precision`. Each query contributes ``0.0`` when its relevance
+    set is empty so callers can safely average heterogeneous evaluation slices
+    without dividing by zero.
+    """
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(ndcg_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
