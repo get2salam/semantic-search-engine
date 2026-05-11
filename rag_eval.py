@@ -117,6 +117,36 @@ def hit_rate_at_k(
     return sum(hit_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
 
 
+def f1_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
+    """Return the F1 score that balances precision@k and recall@k for one query.
+
+    Materialises ``relevant`` once so both component metrics see the same set,
+    and returns ``0.0`` when either component is zero so callers can safely
+    average across queries without dividing by zero.
+    """
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    relevant_ids = _relevant_set(relevant)
+    precision = precision_at_k(retrieved, relevant_ids, k)
+    recall = recall_at_k(retrieved, relevant_ids, k)
+    if precision == 0.0 or recall == 0.0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
+def mean_f1_at_k(
+    runs: Sequence[Sequence[str]], qrels: Sequence[Iterable[str]], k: int
+) -> float:
+    """Return the mean F1@k across aligned retrieval runs and relevance sets."""
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if not runs:
+        return 0.0
+    return sum(f1_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)) / len(runs)
+
+
 def ndcg_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:
     """Return nDCG@k using binary relevance gains.
 

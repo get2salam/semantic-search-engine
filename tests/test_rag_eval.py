@@ -2,9 +2,11 @@ import pytest
 
 from rag_eval import (
     average_precision_at_k,
+    f1_at_k,
     hit_at_k,
     hit_rate_at_k,
     mean_average_precision,
+    mean_f1_at_k,
     mean_reciprocal_rank,
     ndcg_at_k,
     precision_at_k,
@@ -69,6 +71,28 @@ def test_hit_rate_at_k_averages_across_queries():
     assert hit_rate_at_k(runs, qrels, 2) == pytest.approx(2 / 3)
     with pytest.raises(ValueError, match="same length"):
         hit_rate_at_k([["a"]], [{"a"}, {"b"}], 2)
+
+
+def test_f1_at_k_balances_precision_and_recall():
+    retrieved = ["a", "b", "c", "d"]
+    relevant = {"a", "b"}
+
+    # precision@4 = 0.5, recall@4 = 1.0 -> F1 = 2/3
+    assert f1_at_k(retrieved, relevant, 4) == pytest.approx(2 / 3)
+    # No relevant in top-k collapses to zero rather than NaN.
+    assert f1_at_k(["x", "y"], {"a"}, 2) == 0.0
+    assert f1_at_k(["a"], set(), 1) == 0.0
+    with pytest.raises(ValueError, match="k"):
+        f1_at_k(["a"], {"a"}, 0)
+
+
+def test_mean_f1_at_k_averages_and_validates_alignment():
+    runs = [["a", "b"], ["x", "y"]]
+    qrels = [{"a", "b"}, {"a"}]
+
+    assert mean_f1_at_k(runs, qrels, 2) == pytest.approx(0.5)
+    with pytest.raises(ValueError, match="same length"):
+        mean_f1_at_k([["a"]], [{"a"}, {"b"}], 2)
 
 
 def test_mean_average_precision_validates_alignment():
