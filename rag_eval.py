@@ -1,7 +1,7 @@
 """Small retrieval evaluation metrics for RAG experiments."""
 
 from collections.abc import Iterable, Mapping, Sequence
-from math import log2
+from math import exp, log, log2
 
 
 def _relevant_set(relevant: Iterable[str]) -> set[str]:
@@ -149,6 +149,36 @@ def mean_average_precision(
     return sum(
         average_precision_at_k(run, rel, k) for run, rel in zip(runs, qrels, strict=True)
     ) / len(runs)
+
+
+def geometric_mean_average_precision(
+    runs: Sequence[Sequence[str]],
+    qrels: Sequence[Iterable[str]],
+    k: int,
+    epsilon: float = 1e-5,
+) -> float:
+    """Return GMAP@k: the geometric mean of per-query AP@k.
+
+    Unlike the arithmetic MAP, the geometric mean is dominated by the weakest
+    queries, so improvements on hard queries move the score more than equal
+    gains on already-strong ones. A small ``epsilon`` is added before taking
+    the logarithm to keep zero-AP queries finite (the Robertson 2006
+    convention); the same shift is subtracted back to keep the result in
+    ``[0, 1]``. Returns ``0.0`` for an empty input so callers can safely
+    average across slices without dividing by zero.
+    """
+
+    if len(runs) != len(qrels):
+        raise ValueError("runs and qrels must have the same length")
+    if epsilon <= 0.0:
+        raise ValueError("epsilon must be strictly positive")
+    if not runs:
+        return 0.0
+    total = sum(
+        log(average_precision_at_k(run, rel, k) + epsilon)
+        for run, rel in zip(runs, qrels, strict=True)
+    )
+    return exp(total / len(runs)) - epsilon
 
 
 def hit_at_k(retrieved: Sequence[str], relevant: Iterable[str], k: int) -> float:

@@ -5,6 +5,7 @@ from rag_eval import (
     bpref,
     expected_reciprocal_rank,
     f1_at_k,
+    geometric_mean_average_precision,
     graded_ndcg_at_k,
     hit_at_k,
     hit_rate_at_k,
@@ -176,6 +177,27 @@ def test_mean_average_precision_validates_alignment():
     assert mean_average_precision(runs, qrels, 3) == pytest.approx((1.0 + (1 / 2 + 2 / 3) / 2) / 2)
     with pytest.raises(ValueError, match="same length"):
         mean_average_precision([["a"]], [{"a"}, {"b"}], 3)
+
+
+def test_geometric_mean_average_precision_emphasises_weak_queries():
+    from math import exp, log
+
+    runs = [["a", "b"], ["x", "y", "a"]]
+    qrels = [{"a"}, {"a"}]
+    eps = 1e-5
+    # Per-query AP@2 -> 1.0 and 0.0 (hit at rank 3 is past k=2).
+    expected = exp((log(1.0 + eps) + log(0.0 + eps)) / 2) - eps
+
+    assert geometric_mean_average_precision(runs, qrels, 2) == pytest.approx(expected)
+    # GMAP is strictly bounded above by MAP whenever per-query APs differ.
+    assert geometric_mean_average_precision(runs, qrels, 2) < mean_average_precision(runs, qrels, 2)
+    # Identical per-query APs collapse GMAP back to MAP.
+    assert geometric_mean_average_precision([["a"], ["b"]], [{"a"}, {"b"}], 1) == pytest.approx(1.0)
+    assert geometric_mean_average_precision([], [], 3) == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        geometric_mean_average_precision([["a"]], [{"a"}, {"b"}], 3)
+    with pytest.raises(ValueError, match="epsilon"):
+        geometric_mean_average_precision([["a"]], [{"a"}], 3, epsilon=0.0)
 
 
 def test_mean_ndcg_at_k_averages_and_validates_alignment():
