@@ -6,8 +6,9 @@ Tests for the FastAPI REST endpoints using httpx TestClient.
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
-from api import app
+from api import BatchSearchRequest, DocumentsRequest, SearchRequest, app
 
 
 @pytest.fixture(scope="module")
@@ -188,6 +189,23 @@ class TestSearchEndpoints:
 
 class TestRequestValidation:
     """Input validation and edge cases."""
+
+    def test_request_models_strip_outer_whitespace(self):
+        documents = DocumentsRequest(documents=["  Indexed document  "])
+        search = SearchRequest(query="  neural search  ")
+        batch = BatchSearchRequest(queries=["  AI  ", " retrieval "])
+
+        assert documents.documents == ["Indexed document"]
+        assert search.query == "neural search"
+        assert batch.queries == ["AI", "retrieval"]
+
+    def test_request_models_reject_whitespace_only_text(self):
+        with pytest.raises(ValidationError, match="documents"):
+            DocumentsRequest(documents=["usable", "   "])
+        with pytest.raises(ValidationError, match="query"):
+            SearchRequest(query="\t\n")
+        with pytest.raises(ValidationError, match="queries"):
+            BatchSearchRequest(queries=["semantic", "  "])
 
     def test_missing_query_returns_422(self, client):
         resp = client.post("/search", json={})

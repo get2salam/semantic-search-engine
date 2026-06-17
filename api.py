@@ -18,7 +18,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from config import get_settings
 from logging_config import (
@@ -81,6 +81,16 @@ class DocumentsRequest(BaseModel):
     )
     batch_size: int = Field(default=64, ge=1, le=1024, description="Encoding batch size")
 
+    @field_validator("documents")
+    @classmethod
+    def strip_and_reject_blank_documents(cls, documents: list[str]) -> list[str]:
+        """Reject whitespace-only documents before expensive embedding work."""
+
+        cleaned = [document.strip() for document in documents]
+        if any(not document for document in cleaned):
+            raise ValueError("documents must contain non-empty text")
+        return cleaned
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -123,6 +133,16 @@ class SearchRequest(BaseModel):
         ),
     )
 
+    @field_validator("query")
+    @classmethod
+    def strip_and_reject_blank_query(cls, query: str) -> str:
+        """Avoid embedding meaningless whitespace-only search queries."""
+
+        query = query.strip()
+        if not query:
+            raise ValueError("query must contain non-empty text")
+        return query
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -143,6 +163,16 @@ class BatchSearchRequest(BaseModel):
 
     queries: list[str] = Field(..., min_length=1, description="List of search queries")
     top_k: int = Field(default=5, ge=1, description="Results per query")
+
+    @field_validator("queries")
+    @classmethod
+    def strip_and_reject_blank_queries(cls, queries: list[str]) -> list[str]:
+        """Reject blank batch members so every encoded query is meaningful."""
+
+        cleaned = [query.strip() for query in queries]
+        if any(not query for query in cleaned):
+            raise ValueError("queries must contain non-empty text")
+        return cleaned
 
     model_config = {
         "json_schema_extra": {
@@ -568,7 +598,13 @@ async def search_batch(body: BatchSearchRequest):
 
 @app.get("/search", response_model=SearchResponse, tags=["Search"])
 async def search_get(
-    q: str = Query(..., min_length=1, max_length=10_000, description="Search query"),
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=10_000,
+        pattern=r".*\S.*",
+        description="Search query",
+    ),
     top_k: int = Query(default=5, ge=1, le=50, description="Number of results"),
     threshold: float | None = Query(default=None, ge=0.0, le=1.0),
     mmr_lambda: float | None = Query(
