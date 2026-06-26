@@ -42,6 +42,20 @@ cd semantic-search-engine
 pip install -r requirements.txt
 ```
 
+### Fast local verification
+
+Before opening a PR, run the same dependency-light smoke gate used by CI:
+
+```bash
+pip install pytest numpy ruff==0.15.4
+make ci-fast
+```
+
+`make ci-fast` runs Ruff plus the deterministic RAG/evaluation tests. It does
+not install Torch, FAISS, or download sentence-transformer models, so it is the
+quickest way to catch formatting and offline regression failures before the full
+matrix test job runs.
+
 ### Option 1: REST API
 
 ```bash

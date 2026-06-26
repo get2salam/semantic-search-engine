@@ -1,4 +1,4 @@
-.PHONY: help install dev build run serve test test-rag lint format clean quality-gate quality-gate-update audit-demo audit-demo-full
+.PHONY: help install dev build run serve ci-fast test test-rag lint format clean quality-gate quality-gate-update audit-demo audit-demo-full
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -25,6 +25,16 @@ serve: ## Start the REST API server
 
 serve-docker: ## Run the API via Docker Compose
 	docker compose up --build
+
+ci-fast: ## Run the offline CI smoke gate (no model downloads)
+	ruff check .
+	ruff format --check .
+	pytest \
+		tests/test_rag_*.py \
+		tests/test_quality_gate.py \
+		tests/test_eval_data.py \
+		tests/test_eval_stats.py \
+		-v
 
 test: ## Run the full test suite
 	pytest tests/ -v
